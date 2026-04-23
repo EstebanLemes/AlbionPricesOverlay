@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows;
 using System.Windows.Forms;
+using AlbionPrices.Services;
 using Application = System.Windows.Application;
 
 namespace AlbionPrices;
@@ -9,10 +10,13 @@ public partial class App : Application
 {
     private NotifyIcon? _notifyIcon;
     private MainWindow? _mainWindow;
+    private UpdateService? _updateService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _updateService = new UpdateService("tu-usuario", "AlbionPricesOverlay");
 
         _notifyIcon = new NotifyIcon
         {
@@ -21,12 +25,11 @@ public partial class App : Application
             Text = "AlbionPrices - Ctrl+D para abrir"
         };
 
-        _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
+        _notifyIcon.DoubleClick += (s, ev) => ShowMainWindow();
 
         var contextMenu = new ContextMenuStrip();
-        contextMenu.Items.Add("Show", null, (s, e) => ShowMainWindow());
-        contextMenu.Items.Add("-");
-        contextMenu.Items.Add("Exit", null, (s, e) => ExitApplication());
+        contextMenu.Items.Add("Show", null, (s, ev) => ShowMainWindow());
+        contextMenu.Items.Add("Exit", null, (s, ev) => ExitApplication());
         _notifyIcon.ContextMenuStrip = contextMenu;
 
         CreateMainWindow();
@@ -37,8 +40,6 @@ public partial class App : Application
         _mainWindow = new MainWindow();
         _mainWindow.WindowStartupLocation = WindowStartupLocation.Manual;
         _mainWindow.ShowInTaskbar = false;
-        // Show with Opacity=0 so the Loaded event fires (registers the hotkey),
-        // then hide immediately. Without Show(), the HWND never exists and Loaded never fires.
         _mainWindow.Opacity = 0;
         _mainWindow.Show();
         _mainWindow.Hide();
@@ -46,6 +47,8 @@ public partial class App : Application
 
         _mainWindow.SetNotifyIcon(_notifyIcon!);
     }
+
+    public UpdateService? UpdateService => _updateService;
 
     public void ShowMainWindow()
     {

@@ -1,0 +1,35 @@
+# Build results
+bin/
+obj/
+out/
+
+# Visual Studio / Rider / Rider
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# JetBrains Rider
+.idea/
+*.DotSettings.user
+
+# NuGet
+packages/
+*.nupkg
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# OCR captures (generated at runtime)
+tessdata/
+
+# Local settings
+appsettings*.json
+*.local.json

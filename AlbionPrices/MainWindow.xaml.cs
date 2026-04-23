@@ -19,12 +19,11 @@ public partial class MainWindow : Window
     private bool _dbLoaded;
     private NotifyIcon? _notifyIcon;
     private System.Windows.Threading.DispatcherTimer? _hideTimer;
+    private CancellationTokenSource? _cts;
 
-    // Tier / enchantment state for the currently displayed item
-    private string? _baseId;       // e.g. "HEAD_CLOTH_AVALON"
+    private string? _baseId;
     private int _currentTier;
     private int _currentEnchant;
-    // tier → sorted list of available enchantments (from items.json)
     private Dictionary<int, List<int>> _variants = new();
 
     private static readonly Regex TieredItemRegex =
@@ -58,6 +57,8 @@ public partial class MainWindow : Window
                     StatusText.Text = $"ERROR DB: {_itemDatabase.LoadError}";
                 else
                     StatusText.Text = $"{_itemDatabase.ItemCount:N0} items cargados. Escribí el nombre del item.";
+
+                _ = CheckForUpdateAsync();
             }
         };
     }
@@ -97,10 +98,19 @@ public partial class MainWindow : Window
 
     internal void ShowCentered()
     {
+        if (IsVisible && IsLoaded)
+        {
+            Activate();
+            Focus();
+            return;
+        }
+
         var screenWidth = SystemParameters.PrimaryScreenWidth;
         var screenHeight = SystemParameters.PrimaryScreenHeight;
+
         Left = (screenWidth - Width) / 2;
-        Top = (screenHeight - ActualHeight) / 2;
+        Top = (screenHeight - Height) / 2;
+
         Show();
         Activate();
         Focus();
@@ -264,10 +274,13 @@ public partial class MainWindow : Window
     private async Task RefetchCurrentItem()
     {
         var itemId = BuildItemId();
+
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+
         _isLoading = true;
         try
         {
-            // Keep ItemInfoPanel (and tier/enchant buttons) visible while loading
             StatusText.Text = "Actualizando...";
             StatusText.Visibility = Visibility.Visible;
             ErrorText.Visibility = Visibility.Collapsed;
@@ -277,13 +290,12 @@ public partial class MainWindow : Window
             BestSellPriceText.Text = "…";
             CitiesList.ItemsSource = null;
 
-            var summary = await _apiService.GetItemPriceAsync(itemId);
+            var summary = await _apiService.GetItemPriceAsync(itemId, _cts.Token);
 
             StatusText.Visibility = Visibility.Collapsed;
 
             if (summary == null || summary.Prices.Count == 0)
             {
-                // Show error inline — don't hide ItemInfoPanel so user can still pick another combo
                 ErrorText.Text = $"Sin datos para: {itemId}";
                 ErrorText.Visibility = Visibility.Visible;
                 BestBuyCityText.Text = "—";
@@ -295,6 +307,10 @@ public partial class MainWindow : Window
 
             summary.ItemName = _itemDatabase.GetNameById(itemId) ?? ItemNameText.Text;
             DisplayPriceInfo(summary, setupTierEnchant: false);
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("RefetchCurrentItem cancelled");
         }
         catch (Exception ex)
         {
@@ -331,6 +347,21 @@ public partial class MainWindow : Window
         ErrorText.Visibility = Visibility.Visible;
     }
 
+    private async Task CheckForUpdateAsync()
+    {
+        var app = System.Windows.Application.Current as App;
+        var updateService = app?.UpdateService;
+        if (updateService == null) return;
+
+        await updateService.CheckForUpdateAsync();
+
+        if (updateService.IsUpdateAvailable)
+        {
+            UpdateBanner.Text = $"Nueva version disponible: v{updateService.LatestVersion}";
+            UpdateBanner.Visibility = Visibility.Visible;
+        }
+    }
+
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 1)
@@ -341,14 +372,16 @@ public partial class MainWindow : Window
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
-        WindowState = WindowState.Minimized;
         Hide();
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    private void UpdateBanner_Click(object sender, RoutedEventArgs e)
     {
         var app = System.Windows.Application.Current as App;
-        app?.ExitApplication();
+        if (app?.UpdateService?.IsUpdateAvailable == true)
+        {
+            _ = app.UpdateService.DownloadAndInstallUpdateAsync();
+        }
     }
 
     private async void CheckButton_Click(object sender, RoutedEventArgs e)
@@ -370,7 +403,13 @@ public partial class MainWindow : Window
             return;
 
         if (_isLoading)
-            return;
+        {
+            _cts?.Cancel();
+            await Task.Delay(100);
+        }
+
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
 
         _isLoading = true;
 
@@ -413,7 +452,7 @@ public partial class MainWindow : Window
 
             DebugText.Text = $"Encontrado: {itemId}";
 
-            var summary = await _apiService.GetItemPriceAsync(itemId);
+            var summary = await _apiService.GetItemPriceAsync(itemId, _cts.Token);
 
             if (summary == null || summary.Prices.Count == 0)
             {
@@ -426,6 +465,10 @@ public partial class MainWindow : Window
 
             DisplayPriceInfo(summary);
             ShowCentered();
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("CheckItem cancelled");
         }
         catch (Exception ex)
         {

@@ -31,19 +31,18 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" Margin="10,0">
                         <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
                     </StackPanel>
                     <Button Grid.Column="1" Content="_" Width="32" Height="32" Background="Transparent" BorderThickness="0"
                             Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="X" Width="32" Height="32" Background="Transparent" BorderThickness="0"
-                            Foreground="#888" FontWeight="Bold" Click="CloseButton_Click" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
             
             <StackPanel x:Name="ContentPanel" Grid.Row="1" Margin="15">
+                    <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11" FontWeight="Bold"
+                               TextAlignment="Center" Margin="0,0,0,10" Cursor="Hand" MouseLeftButtonUp="UpdateBanner_Click" Visibility="Collapsed"/>
                     <TextBlock Text="Item name:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
                     <Grid Margin="0,0,0,15">
                         <Grid.ColumnDefinitions>

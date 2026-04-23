@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using AlbionPrices.Models;
 
 namespace AlbionPrices.Services;
@@ -10,11 +11,18 @@ public class AlbionApiService
 
     public AlbionApiService()
     {
-        _httpClient = new HttpClient();
-        _httpClient.Timeout = TimeSpan.FromSeconds(10);
+        var handler = new HttpClientHandler
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+        };
+        _httpClient = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("AlbionPrices/1.0");
     }
 
-    public async Task<ItemPriceSummary?> GetItemPriceAsync(string itemId)
+    public async Task<ItemPriceSummary?> GetItemPriceAsync(string itemId, CancellationToken ct = default)
     {
         try
         {
@@ -22,7 +30,13 @@ public class AlbionApiService
 
             System.Diagnostics.Debug.WriteLine($"API URL: {url}");
 
-            var response = await _httpClient.GetStringAsync(url);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(12));
+
+            var response = await _httpClient.GetStringAsync(url, cts.Token);
+
+            ct.ThrowIfCancellationRequested();
+
             System.Diagnostics.Debug.WriteLine($"API Response: {response[..Math.Min(300, response.Length)]}");
 
             if (string.IsNullOrWhiteSpace(response) || response == "[]" || response.StartsWith("<"))
@@ -34,7 +48,6 @@ public class AlbionApiService
 
             var summary = new ItemPriceSummary { ItemId = itemId, ItemName = itemId };
 
-            // Group by city — API returns one entry per (city, quality), keep best prices per city
             foreach (var group in prices.Where(p => p.City != null).GroupBy(p => p.City!))
             {
                 var buyAt = group.Where(p => p.SellPriceMin > 0).Min(p => p.SellPriceMin) ?? 0;
@@ -52,6 +65,11 @@ public class AlbionApiService
             }
 
             return summary.Prices.Count > 0 ? summary : null;
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("API request cancelled or timed out");
+            return null;
         }
         catch (Exception ex)
         {
