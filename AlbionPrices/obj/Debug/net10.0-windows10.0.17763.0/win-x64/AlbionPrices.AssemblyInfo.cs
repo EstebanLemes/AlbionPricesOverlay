@@ -13,11 +13,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("AlbionPrices")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.12")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.12+94490f6decd5e69355282984e303bf715f8019f6")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.1+ec958a208dd9201fb9b2a7d3862b46366d9c408c")]
 [assembly: System.Reflection.AssemblyProductAttribute("AlbionPrices")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AlbionPrices")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.0.12")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.0.1")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows10.0.17763.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows10.0.17763.0")]
 

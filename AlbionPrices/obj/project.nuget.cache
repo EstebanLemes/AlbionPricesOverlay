@@ -1,14 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "IT/dYPROXJU=",
+  "dgSpecHash": "GS5+fIFqSxk=",
   "success": true,
   "projectFilePath": "C:\\Users\\esteb\\source\\repos\\AlbionPricesOverlay\\AlbionPrices\\AlbionPrices.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.6\\microsoft.net.illink.tasks.10.0.6.nupkg.sha512",
     "C:\\Users\\esteb\\.nuget\\packages\\tesseract\\5.2.0\\tesseract.5.2.0.nupkg.sha512",
-    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.6\\microsoft.netcore.app.runtime.win-x64.10.0.6.nupkg.sha512",
-    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.6\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.6.nupkg.sha512",
+    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.17763.57\\microsoft.windows.sdk.net.ref.10.0.17763.57.nupkg.sha512",
     "C:\\Users\\esteb\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\10.0.6\\microsoft.aspnetcore.app.runtime.win-x64.10.0.6.nupkg.sha512",
-    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.17763.57\\microsoft.windows.sdk.net.ref.10.0.17763.57.nupkg.sha512"
+    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.6\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.6.nupkg.sha512",
+    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.6\\microsoft.netcore.app.runtime.win-x64.10.0.6.nupkg.sha512"
   ],
   "logs": []
 }
