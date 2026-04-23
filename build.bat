@@ -21,8 +21,8 @@ if exist "Installer" rmdir /s /q "Installer"
 if exist "AlbionPrices\bin\Release\net10.0-windows10.0.17763.0\win-x64\publish" rmdir /s /q "AlbionPrices\bin\Release\net10.0-windows10.0.17763.0\win-x64\publish"
 
 REM Build
-echo [1/4] Compilando...
-dotnet build --configuration Release -c Release
+echo [1/5] Compilando...
+dotnet build -c Release
 if errorlevel 1 (
     echo ERROR: Build failed!
     pause
@@ -30,7 +30,7 @@ if errorlevel 1 (
 )
 
 REM Publish
-echo [2/4] Publicando...
+echo [2/5] Publicando...
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o AlbionPrices\bin\Release\net10.0-windows10.0.17763.0\win-x64\publish
 if errorlevel 1 (
     echo ERROR: Publish failed!
@@ -46,7 +46,7 @@ if exist "tessdata" (
 )
 
 REM Create ZIP
-echo [3/4] Creando ZIP...
+echo [3/5] Creando ZIP...
 mkdir Releases
 powershell -command "Compress-Archive -Path 'AlbionPrices\bin\Release\net10.0-windows10.0.17763.0\win-x64\publish\*' -DestinationPath 'Releases\AlbionPrices-%VERSION%.zip' -Force"
 if errorlevel 1 (
@@ -56,8 +56,32 @@ if errorlevel 1 (
 )
 
 REM Update Inno Setup version
-echo [4/4] Actualizando script de instalacion...
-powershell -command "(Get-Content 'setup.iss') -replace 'MyAppVersion \"[^\"]*\"', 'MyAppVersion \"%VERSION%\"' | Set-Content 'setup.iss'"
+echo [4/5] Actualizando script de instalacion...
+(
+echo $version = "%VERSION%"
+echo $content = Get-Content setup.iss -Raw
+echo $newContent = $content -replace 'MyAppVersion ".*"', "MyAppVersion ""$version"""
+echo Set-Content setup.iss -Value $newContent
+) > update_version.ps1
+powershell -ExecutionPolicy Bypass -File update_version.ps1
+del update_version.ps1
+
+REM Compile installer with Inno Setup
+echo [5/5] Compilando installer...
+if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
+    echo Compilando installer con Inno Setup...
+    cmd /c ""C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss"
+    if errorlevel 1 (
+        echo ERROR: Installer compilation failed!
+        pause
+        exit /b 1
+    )
+    echo [OK] Installer creado
+) else (
+    echo ADVERTENCIA: Inno Setup no encontrado
+    pause
+    exit /b 1
+)
 
 echo.
 echo ============================================
@@ -67,24 +91,18 @@ echo Version: %VERSION%
 echo.
 echo Archivos generados:
 echo   - Releases\AlbionPrices-%VERSION%.zip
+echo   - Installer\AlbionPrices-Setup-%VERSION%.exe
 echo   - setup.iss (actualizado)
 echo.
 echo ============================================
 echo.
 echo PROXIMOS PASOS:
 echo.
-echo 1. Crear release en GitHub:
-echo    - Tag: v%VERSION%
-echo    - Titulo: Release v%VERSION%
-echo    - Adjuntar: Releases\AlbionPrices-%VERSION%.zip
+echo 1. Verificar Release:
+echo    - Releases\AlbionPrices-%VERSION%.zip
+echo    - Installer\AlbionPrices-Setup-%VERSION%.exe
 echo.
-echo 2. Compilar installer (opcional):
-echo    - Abre setup.iss con Inno Setup
-echo    - Crea el installer desde Releases
-echo.
-echo 3. Para pruebas locales:
-echo    - Instalar desde el ZIP o desde el installer
-echo    - El sistema de updates detectara nuevas versiones
+echo 2. Probar installer o ZIP
 echo.
 
 pause

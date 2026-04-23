@@ -2,9 +2,9 @@
 ; Descarga Inno Setup: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "AlbionPrices"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "tu-usuario"
-#define MyAppURL "https://github.com/tu-usuario/AlbionPricesOverlay"
+#define MyAppVersion "1.0.12"
+#define MyAppPublisher "EstebanLemes"
+#define MyAppURL "https://github.com/EstebanLemes/AlbionPricesOverlay"
 #define MyAppExeName "AlbionPrices.exe"
 
 [Setup]
@@ -44,3 +44,16 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+
+
+
+
+
+
+
+
+
+
+
+

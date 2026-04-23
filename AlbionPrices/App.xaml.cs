@@ -16,7 +16,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _updateService = new UpdateService("tu-usuario", "AlbionPricesOverlay");
+        _updateService = new UpdateService("EstebanLemes", "AlbionPricesOverlay");
 
         _notifyIcon = new NotifyIcon
         {

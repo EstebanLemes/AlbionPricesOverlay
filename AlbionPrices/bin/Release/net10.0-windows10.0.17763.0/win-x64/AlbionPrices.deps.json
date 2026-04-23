@@ -7,7 +7,7 @@
   "targets": {
     ".NETCoreApp,Version=v10.0": {},
     ".NETCoreApp,Version=v10.0/win-x64": {
-      "AlbionPrices/1.0.0": {
+      "AlbionPrices/1.0.12": {
         "dependencies": {
           "Tesseract": "5.2.0",
           "runtimepack.Microsoft.NETCore.App.Runtime.win-x64": "10.0.6",
@@ -1021,7 +1021,7 @@
     }
   },
   "libraries": {
-    "AlbionPrices/1.0.0": {
+    "AlbionPrices/1.0.12": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

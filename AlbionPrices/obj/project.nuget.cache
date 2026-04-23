@@ -1,10 +1,9 @@
 {
   "version": 2,
-  "dgSpecHash": "HqW4dAHLwqU=",
+  "dgSpecHash": "IT/dYPROXJU=",
   "success": true,
   "projectFilePath": "C:\\Users\\esteb\\source\\repos\\AlbionPricesOverlay\\AlbionPrices\\AlbionPrices.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\esteb\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.6\\microsoft.net.illink.tasks.10.0.6.nupkg.sha512",
     "C:\\Users\\esteb\\.nuget\\packages\\tesseract\\5.2.0\\tesseract.5.2.0.nupkg.sha512",
     "C:\\Users\\esteb\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.6\\microsoft.netcore.app.runtime.win-x64.10.0.6.nupkg.sha512",
     "C:\\Users\\esteb\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.6\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.6.nupkg.sha512",
