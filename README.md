@@ -117,7 +117,7 @@ Respuesta procesada para obtener:
 
 ```powershell
 # Opción 1: Script automático
-.\build.bat
+.\build.ps1 -GitHubOwner "GitHubUser"
 
 # Pasos del script:
 # 1. Lee versión desde AlbionPrices.csproj
