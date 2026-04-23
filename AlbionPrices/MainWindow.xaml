@@ -1,0 +1,135 @@
+<Window x:Class="AlbionPrices.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AlbionPrices"
+        mc:Ignorable="d"
+        Title="AlbionPrices"
+        Width="420" Height="Auto"
+        MinWidth="400" MinHeight="220"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="True"
+        Topmost="True"
+        Left="100" Top="100">
+    <Border Background="#E6101012" BorderBrush="#FF7550" BorderThickness="2" CornerRadius="8">
+        <Border.Effect>
+            <DropShadowEffect ShadowDepth="0" BlurRadius="15" Opacity="0.6" Color="#FF7550"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <Border Grid.Row="0" Background="#FF1A1520" CornerRadius="6,6,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Margin="10,0">
+                        <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="_" Width="32" Height="32" Background="Transparent" BorderThickness="0"
+                            Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            
+            <StackPanel x:Name="ContentPanel" Grid.Row="1" Margin="15">
+                    <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11" FontWeight="Bold"
+                               TextAlignment="Center" Margin="0,0,0,10" Cursor="Hand" MouseLeftButtonUp="UpdateBanner_Click" Visibility="Collapsed"/>
+                    <TextBlock Text="Item name:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
+                    <Grid Margin="0,0,0,15">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ItemInput" Background="#1A1A1A" Foreground="White" BorderBrush="#444" 
+                                 FontSize="12" Padding="8,6" KeyDown="ItemInput_KeyDown"/>
+                        <Button Grid.Column="1" Content="Check" Background="#FF7550" Foreground="White" 
+                                BorderThickness="0" Padding="15,6" Margin="5,0,0,0" Click="CheckButton_Click"/>
+                    </Grid>
+                    
+                    <TextBlock x:Name="StatusText" Text="Escribí el nombre del item" Foreground="#AAA" FontSize="11" TextAlignment="Center" Margin="0,5"/>
+                    <TextBlock x:Name="DebugText" Text="" Foreground="#555" FontSize="9" TextAlignment="Center" Margin="0,2" Visibility="Collapsed"/>
+                    
+                    <StackPanel x:Name="ItemInfoPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="ItemNameText" Text="" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                        <TextBlock x:Name="ItemIdText" Text="" Foreground="#888" FontSize="10" Margin="0,0,0,8"/>
+
+                        <!-- Tier / Enchantment selectors — only shown for tiered items -->
+                        <StackPanel x:Name="TierEnchantPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Tier" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
+                                <WrapPanel x:Name="TierButtonsPanel"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Encant." Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
+                                <WrapPanel x:Name="EnchantButtonsPanel"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="BUY LOW" Foreground="#4CAF50" FontWeight="Bold" FontSize="11" Margin="0,0,0,5"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="City: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock x:Name="BestBuyCityText" Text="" Foreground="#4CAF50" FontWeight="Bold" FontSize="11"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Price: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock x:Name="BestBuyPriceText" Text="" Foreground="#4CAF50" FontWeight="Bold" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        
+                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="SELL HIGH" Foreground="#FF5722" FontWeight="Bold" FontSize="11" Margin="0,0,0,5"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="City: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock x:Name="BestSellCityText" Text="" Foreground="#FF5722" FontWeight="Bold" FontSize="11"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Price: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock x:Name="BestSellPriceText" Text="" Foreground="#FF5722" FontWeight="Bold" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        
+                        <ItemsControl x:Name="CitiesList" Margin="0,0,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#15FFFFFF" CornerRadius="4" Padding="10,6" Margin="0,3">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding City}" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                                                <TextBlock Text="Comprar" Foreground="#4CAF50" FontSize="9" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding BuyAtLabel}" Foreground="#4CAF50" FontSize="11"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Vender" Foreground="#FF7550" FontSize="9" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding SellAtLabel}" Foreground="#FF7550" FontSize="11"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    
+                    <TextBlock x:Name="ErrorText" Text="" Foreground="#FF4444" FontSize="11" TextAlignment="Center" Visibility="Collapsed" Margin="0,10"/>
+                </StackPanel>
+        </Grid>
+    </Border>
+</Window>
