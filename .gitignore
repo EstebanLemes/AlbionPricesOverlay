@@ -1,0 +1,46 @@
+# Build results
+bin/
+obj/
+out/
+ Releases/
+ Installer/
+
+# Solution files
+*.sln
+*.slnx
+
+# User settings
+*.user
+*.suo
+*.userosscache
+*.rsuser
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.DotSettings.user
+
+# NuGet
+packages/
+*.nupkg
+project.assets.json
+*.nuget.g.props
+*.nuget.dgspec.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# OCR data (downloaded at runtime)
+tessdata/
+
+# Local appsettings
+appsettings*.json
+*.local.json
+
+# Readme generado (no commitear, se regenera)
+README.md
