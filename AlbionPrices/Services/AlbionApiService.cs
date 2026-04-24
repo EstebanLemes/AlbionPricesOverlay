@@ -55,11 +55,15 @@ public class AlbionApiService
 
                 if (buyAt > 0 || sellAt > 0)
                 {
+                    var buyEntry  = group.Where(p => p.SellPriceMin > 0).OrderBy(p => p.SellPriceMin).FirstOrDefault();
+                    var sellEntry = group.Where(p => p.BuyPriceMax  > 0).OrderByDescending(p => p.BuyPriceMax).FirstOrDefault();
                     summary.Prices.Add(new CityPrices
                     {
-                        City = group.Key,
-                        BuyAt = buyAt,
-                        SellAt = sellAt,
+                        City       = group.Key,
+                        BuyAt      = buyAt,
+                        BuyAtDate  = buyEntry?.SellPriceMinDate,
+                        SellAt     = sellAt,
+                        SellAtDate = sellEntry?.BuyPriceMaxDate,
                     });
                 }
             }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace AlbionPrices.Models;
@@ -13,9 +14,11 @@ public class PriceApiResponse
     [JsonPropertyName("quality")]
     public int? Quality { get; set; }
 
-    // Cheapest sell order = price you PAY to buy the item instantly
     [JsonPropertyName("sell_price_min")]
     public double? SellPriceMin { get; set; }
+
+    [JsonPropertyName("sell_price_min_date")]
+    public DateTime? SellPriceMinDate { get; set; }
 
     [JsonPropertyName("sell_price_max")]
     public double? SellPriceMax { get; set; }
@@ -23,9 +26,11 @@ public class PriceApiResponse
     [JsonPropertyName("buy_price_min")]
     public double? BuyPriceMin { get; set; }
 
-    // Highest buy order = price you GET when selling the item instantly
     [JsonPropertyName("buy_price_max")]
     public double? BuyPriceMax { get; set; }
+
+    [JsonPropertyName("buy_price_max_date")]
+    public DateTime? BuyPriceMaxDate { get; set; }
 
     [JsonPropertyName("sell_amount")]
     public int? SellAmount { get; set; }
@@ -37,8 +42,10 @@ public class PriceApiResponse
 public class CityPrices
 {
     public string City { get; set; } = string.Empty;
-    public double BuyAt { get; set; }   // sell_price_min: price to buy the item
-    public double SellAt { get; set; }  // buy_price_max: price received when selling
+    public double BuyAt { get; set; }
+    public DateTime? BuyAtDate { get; set; }
+    public double SellAt { get; set; }
+    public DateTime? SellAtDate { get; set; }
 }
 
 public class ItemPriceSummary
@@ -49,4 +56,58 @@ public class ItemPriceSummary
 
     public CityPrices? BestBuyCity => Prices.Where(p => p.BuyAt > 0).OrderBy(p => p.BuyAt).FirstOrDefault();
     public CityPrices? BestSellCity => Prices.Where(p => p.SellAt > 0).OrderByDescending(p => p.SellAt).FirstOrDefault();
+}
+
+public class CityPriceViewModel : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private double _buyAt;
+    private double _sellAt;
+    private DateTime? _buyAtDate;
+    private DateTime? _sellAtDate;
+
+    public string City { get; set; } = "";
+
+    public double BuyAt
+    {
+        get => _buyAt;
+        set { _buyAt = value; Notify(nameof(BuyAtLabel)); }
+    }
+
+    public double SellAt
+    {
+        get => _sellAt;
+        set { _sellAt = value; Notify(nameof(SellAtLabel)); }
+    }
+
+    public DateTime? BuyAtDate
+    {
+        get => _buyAtDate;
+        set { _buyAtDate = value; Notify(nameof(BuyAtAgo)); }
+    }
+
+    public DateTime? SellAtDate
+    {
+        get => _sellAtDate;
+        set { _sellAtDate = value; Notify(nameof(SellAtAgo)); }
+    }
+
+    public string BuyAtLabel  => BuyAt  > 0 ? $"{BuyAt:N0}"  : "—";
+    public string SellAtLabel => SellAt > 0 ? $"{SellAt:N0}" : "—";
+    public string BuyAtAgo    => FormatAgo(BuyAtDate);
+    public string SellAtAgo   => FormatAgo(SellAtDate);
+
+    private void Notify(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    private static string FormatAgo(DateTime? date)
+    {
+        if (date == null || date == DateTime.MinValue) return "";
+        var diff = DateTime.UtcNow - date.Value.ToUniversalTime();
+        if (diff.TotalSeconds < 60) return "ahora";
+        if (diff.TotalMinutes < 60) return $"hace {(int)diff.TotalMinutes}m";
+        if (diff.TotalHours < 24)   return $"hace {(int)diff.TotalHours}h";
+        return $"hace {(int)diff.TotalDays}d";
+    }
 }

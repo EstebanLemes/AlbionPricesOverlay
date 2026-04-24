@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private NotifyIcon? _notifyIcon;
     private System.Windows.Threading.DispatcherTimer? _hideTimer;
     private CancellationTokenSource? _cts;
+    private readonly Dictionary<string, CityPriceViewModel> _cityViewModels = new();
 
     private string? _baseId;
     private int _currentTier;
@@ -39,6 +40,13 @@ public partial class MainWindow : Window
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
         Deactivated += MainWindow_Deactivated;
+
+        var rt = (System.Windows.Application.Current as App)?.RealtimeService;
+        if (rt != null)
+        {
+            rt.PriceUpdated      += OnRealtimePriceUpdated;
+            rt.ConnectionChanged += OnRealtimeConnectionChanged;
+        }
         
         _hideTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -159,12 +167,20 @@ public partial class MainWindow : Window
             BestSellPriceText.Text = $"{bestSell.SellAt:N0} ";
         }
 
-        CitiesList.ItemsSource = summary.Prices.Select(p => new CityPriceViewModel
+        var vms = summary.Prices.Select(p => new CityPriceViewModel
         {
-            City = p.City,
-            BuyAt = p.BuyAt,
-            SellAt = p.SellAt,
+            City       = p.City,
+            BuyAt      = p.BuyAt,
+            BuyAtDate  = p.BuyAtDate,
+            SellAt     = p.SellAt,
+            SellAtDate = p.SellAtDate,
         }).ToList();
+
+        _cityViewModels.Clear();
+        foreach (var vm in vms) _cityViewModels[vm.City] = vm;
+        CitiesList.ItemsSource = vms;
+
+        (System.Windows.Application.Current as App)?.RealtimeService?.SetItem(summary.ItemId);
     }
 
     // ── Tier / Enchantment helpers ────────────────────────────────────────────
@@ -407,6 +423,28 @@ public partial class MainWindow : Window
         Hide();
     }
 
+    private void OnRealtimePriceUpdated(object? sender, AlbionPrices.Models.PriceApiResponse msg)
+    {
+        if (msg.City is null) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (!_cityViewModels.TryGetValue(msg.City, out var vm)) return;
+            if (msg.SellPriceMin > 0) { vm.BuyAt = msg.SellPriceMin.Value; vm.BuyAtDate = msg.SellPriceMinDate ?? DateTime.UtcNow; }
+            if (msg.BuyPriceMax  > 0) { vm.SellAt = msg.BuyPriceMax.Value; vm.SellAtDate = msg.BuyPriceMaxDate ?? DateTime.UtcNow; }
+        });
+    }
+
+    private void OnRealtimeConnectionChanged(object? sender, bool connected)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            LiveDot.Fill = connected
+                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80))
+                : new SolidColorBrush(System.Windows.Media.Color.FromRgb(85, 85, 85));
+            LiveDot.ToolTip = connected ? "En vivo — datos en tiempo real" : "Sin conexión en tiempo real";
+        });
+    }
+
     private void UpdateBanner_Click(object sender, RoutedEventArgs e)
     {
         var app = System.Windows.Application.Current as App;
@@ -514,11 +552,3 @@ public partial class MainWindow : Window
     }
 }
 
-public class CityPriceViewModel
-{
-    public string City { get; set; } = "";
-    public double BuyAt { get; set; }
-    public double SellAt { get; set; }
-    public string BuyAtLabel => BuyAt > 0 ? $"{BuyAt:N0}" : "—";
-    public string SellAtLabel => SellAt > 0 ? $"{SellAt:N0}" : "—";
-}

@@ -11,12 +11,15 @@ public partial class App : Application
     private NotifyIcon? _notifyIcon;
     private MainWindow? _mainWindow;
     private UpdateService? _updateService;
+    private RealtimePriceService? _realtimeService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        _updateService = new UpdateService("EstebanLemes", "AlbionPricesOverlay");
+        _updateService    = new UpdateService("EstebanLemes", "AlbionPricesOverlay");
+        _realtimeService  = new RealtimePriceService();
+        _ = _realtimeService.ConnectAsync();
 
         _notifyIcon = new NotifyIcon
         {
@@ -48,7 +51,8 @@ public partial class App : Application
         _mainWindow.SetNotifyIcon(_notifyIcon!);
     }
 
-    public UpdateService? UpdateService => _updateService;
+    public UpdateService?      UpdateService     => _updateService;
+    public RealtimePriceService? RealtimeService => _realtimeService;
 
     public void ShowMainWindow()
     {

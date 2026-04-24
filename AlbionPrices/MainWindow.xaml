@@ -34,6 +34,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" Margin="10,0">
                         <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                        <Ellipse x:Name="LiveDot" Width="6" Height="6" Fill="#555" Margin="7,0,0,0" VerticalAlignment="Center" ToolTip="Conectado a datos en tiempo real"/>
                     </StackPanel>
                     <Button Grid.Column="1" Content="_" Width="32" Height="32" Background="Transparent" BorderThickness="0"
                             Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
@@ -116,10 +117,12 @@
                                             <StackPanel Grid.Column="1" Margin="0,0,15,0">
                                                 <TextBlock Text="Comprar" Foreground="#4CAF50" FontSize="9" FontWeight="Bold"/>
                                                 <TextBlock Text="{Binding BuyAtLabel}" Foreground="#4CAF50" FontSize="11"/>
+                                                <TextBlock Text="{Binding BuyAtAgo}" Foreground="#4CAF50" FontSize="8" Opacity="0.55"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Vender" Foreground="#FF7550" FontSize="9" FontWeight="Bold"/>
                                                 <TextBlock Text="{Binding SellAtLabel}" Foreground="#FF7550" FontSize="11"/>
+                                                <TextBlock Text="{Binding SellAtAgo}" Foreground="#FF7550" FontSize="8" Opacity="0.55"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
