@@ -45,6 +45,3 @@ tessdata/
 # Local appsettings
 appsettings*.json
 *.local.json
-
-# Readme generado (no commitear, se regenera)
-README.md

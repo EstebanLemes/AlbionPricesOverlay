@@ -104,7 +104,7 @@ if ($GitHubOwner) {
     
     if ($hasGh) {
         $zipF = "Releases\AlbionPrices-$version.zip"
-        $instF = "Installer\AlbionPrices-Setup-$version.exe"
+        $instF = "..\Installer\AlbionPrices-Setup-$version.exe"
         if ((Test-Path $zipF) -or (Test-Path $instF)) {
             $args = @("release","create","v$version","--title","v$version","--notes","Build")
             if (Test-Path $zipF) { $args += $zipF }
@@ -130,7 +130,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "DONE: v$version" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "ZIP: Releases\AlbionPrices-$version.zip"
-Write-Host "Installer: Installer\AlbionPrices-Setup-$version.exe"
+Write-Host "Installer: ..\Installer\AlbionPrices-Setup-$version.exe"
 if ($GitHubOwner) {
     Write-Host "Release: https://github.com/$GitHubOwner/$GitHubRepo/releases/tag/v$version"
 }
