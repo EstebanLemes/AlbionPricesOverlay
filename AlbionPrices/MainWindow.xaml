@@ -25,45 +25,70 @@
                 <RowDefinition Height="32"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            
+
+            <!-- Title bar -->
             <Border Grid.Row="0" Background="#FF1A1520" CornerRadius="6,6,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Margin="10,0">
+                    <StackPanel Orientation="Horizontal" Margin="10,0" VerticalAlignment="Center">
                         <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
-                        <Ellipse x:Name="LiveDot" Width="6" Height="6" Fill="#555" Margin="7,0,0,0" VerticalAlignment="Center" ToolTip="Conectado a datos en tiempo real"/>
+                        <Ellipse x:Name="LiveDot" Width="6" Height="6" Fill="#555" Margin="7,0,0,0" VerticalAlignment="Center" ToolTip="Sin conexión en tiempo real"/>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="_" Width="32" Height="32" Background="Transparent" BorderThickness="0"
-                            Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="PriceModeBtn" Content="Precios" Width="54" Height="20"
+                                Background="#FF7550" Foreground="White" BorderThickness="0"
+                                FontSize="9" FontWeight="Bold" Margin="0,0,2,0" Click="PriceMode_Click"/>
+                        <Button x:Name="PlayerModeBtn" Content="Jugador" Width="54" Height="20"
+                                Background="Transparent" Foreground="#666" BorderThickness="0"
+                                FontSize="9" Margin="0,0,6,0" Click="PlayerMode_Click"/>
+                        <Button Content="_" Width="32" Height="32" Background="Transparent" BorderThickness="0"
+                                Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </Grid>
             </Border>
-            
-            <StackPanel x:Name="ContentPanel" Grid.Row="1" Margin="15">
-                    <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11" FontWeight="Bold"
-                               TextAlignment="Center" Margin="0,0,0,10" Cursor="Hand" MouseLeftButtonUp="UpdateBanner_Click" Visibility="Collapsed"/>
-                    <TextBlock Text="Item name:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
+
+            <!-- Content -->
+            <StackPanel Grid.Row="1" Margin="15">
+
+                <!-- Shared: update banner -->
+                <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11"
+                           FontWeight="Bold" TextAlignment="Center" Margin="0,0,0,10"
+                           Cursor="Hand" MouseLeftButtonUp="UpdateBanner_Click" Visibility="Collapsed"/>
+
+                <!-- ═══════════════════ PRICE MODE ═══════════════════ -->
+                <StackPanel x:Name="PriceModeContent">
+                    <TextBlock Text="Nombre del item:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
                     <Grid Margin="0,0,0,15">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="ItemInput" Background="#1A1A1A" Foreground="White" BorderBrush="#444" 
+                        <TextBox x:Name="ItemInput" Background="#1A1A1A" Foreground="White" BorderBrush="#444"
                                  FontSize="12" Padding="8,6" KeyDown="ItemInput_KeyDown"/>
-                        <Button Grid.Column="1" Content="Check" Background="#FF7550" Foreground="White" 
+                        <Button Grid.Column="1" Content="Check" Background="#FF7550" Foreground="White"
                                 BorderThickness="0" Padding="15,6" Margin="5,0,0,0" Click="CheckButton_Click"/>
                     </Grid>
-                    
+
                     <TextBlock x:Name="StatusText" Text="Escribí el nombre del item" Foreground="#AAA" FontSize="11" TextAlignment="Center" Margin="0,5"/>
                     <TextBlock x:Name="DebugText" Text="" Foreground="#555" FontSize="9" TextAlignment="Center" Margin="0,2" Visibility="Collapsed"/>
-                    
-                    <StackPanel x:Name="ItemInfoPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="ItemNameText" Text="" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                        <TextBlock x:Name="ItemIdText" Text="" Foreground="#888" FontSize="10" Margin="0,0,0,8"/>
 
-                        <!-- Tier / Enchantment selectors — only shown for tiered items -->
+                    <StackPanel x:Name="ItemInfoPanel" Visibility="Collapsed">
+
+                        <!-- Item header: icon + name -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Border Width="44" Height="44" CornerRadius="4" Background="#1A1A1A" Margin="0,0,10,0">
+                                <Image x:Name="ItemIcon" Stretch="Uniform"/>
+                            </Border>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="ItemNameText" Text="" Foreground="White" FontSize="14" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="ItemIdText" Text="" Foreground="#888" FontSize="10"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Tier / Enchantment selectors -->
                         <StackPanel x:Name="TierEnchantPanel" Visibility="Collapsed" Margin="0,0,0,10">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Tier" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
@@ -75,35 +100,38 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <!-- Best buy -->
+                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,6">
                             <StackPanel>
-                                <TextBlock Text="BUY LOW" Foreground="#4CAF50" FontWeight="Bold" FontSize="11" Margin="0,0,0,5"/>
+                                <TextBlock Text="MEJOR COMPRA" Foreground="#4CAF50" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="City: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock Text="Ciudad: " Foreground="#AAA" FontSize="11"/>
                                     <TextBlock x:Name="BestBuyCityText" Text="" Foreground="#4CAF50" FontWeight="Bold" FontSize="11"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Price: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock Text="Precio: " Foreground="#AAA" FontSize="11"/>
                                     <TextBlock x:Name="BestBuyPriceText" Text="" Foreground="#4CAF50" FontWeight="Bold" FontSize="11"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        
+
+                        <!-- Best sell -->
                         <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,10">
                             <StackPanel>
-                                <TextBlock Text="SELL HIGH" Foreground="#FF5722" FontWeight="Bold" FontSize="11" Margin="0,0,0,5"/>
+                                <TextBlock Text="MEJOR VENTA" Foreground="#FF5722" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="City: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock Text="Ciudad: " Foreground="#AAA" FontSize="11"/>
                                     <TextBlock x:Name="BestSellCityText" Text="" Foreground="#FF5722" FontWeight="Bold" FontSize="11"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Price: " Foreground="#AAA" FontSize="11"/>
+                                    <TextBlock Text="Precio: " Foreground="#AAA" FontSize="11"/>
                                     <TextBlock x:Name="BestSellPriceText" Text="" Foreground="#FF5722" FontWeight="Bold" FontSize="11"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        
-                        <ItemsControl x:Name="CitiesList" Margin="0,0,0,0">
+
+                        <!-- Cities list -->
+                        <ItemsControl x:Name="CitiesList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Background="#15FFFFFF" CornerRadius="4" Padding="10,6" Margin="0,3">
@@ -113,14 +141,14 @@
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding City}" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                            <StackPanel Grid.Column="1" Margin="0,0,15,0">
-                                                <TextBlock Text="Comprar" Foreground="#4CAF50" FontSize="9" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding City}" Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" Margin="0,0,12,0" MinWidth="75">
+                                                <TextBlock Text="Ord. Venta" Foreground="#4CAF50" FontSize="8" FontWeight="Bold"/>
                                                 <TextBlock Text="{Binding BuyAtLabel}" Foreground="#4CAF50" FontSize="11"/>
                                                 <TextBlock Text="{Binding BuyAtAgo}" Foreground="#4CAF50" FontSize="8" Opacity="0.55"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="Vender" Foreground="#FF7550" FontSize="9" FontWeight="Bold"/>
+                                            <StackPanel Grid.Column="2" MinWidth="75">
+                                                <TextBlock Text="Ord. Compra" Foreground="#FF7550" FontSize="8" FontWeight="Bold"/>
                                                 <TextBlock Text="{Binding SellAtLabel}" Foreground="#FF7550" FontSize="11"/>
                                                 <TextBlock Text="{Binding SellAtAgo}" Foreground="#FF7550" FontSize="8" Opacity="0.55"/>
                                             </StackPanel>
@@ -129,10 +157,142 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
                     </StackPanel>
-                    
+
                     <TextBlock x:Name="ErrorText" Text="" Foreground="#FF4444" FontSize="11" TextAlignment="Center" Visibility="Collapsed" Margin="0,10"/>
                 </StackPanel>
+
+                <!-- ═══════════════════ PLAYER MODE ═══════════════════ -->
+                <StackPanel x:Name="PlayerModeContent" Visibility="Collapsed">
+                    <TextBlock Text="Nombre del jugador:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="PlayerInput" Background="#1A1A1A" Foreground="White" BorderBrush="#444"
+                                 FontSize="12" Padding="8,6" KeyDown="PlayerInput_KeyDown"/>
+                        <Button Grid.Column="1" Content="Buscar" Background="#FF7550" Foreground="White"
+                                BorderThickness="0" Padding="12,6" Margin="5,0,0,0" Click="PlayerSearchButton_Click"/>
+                    </Grid>
+
+                    <TextBlock x:Name="PlayerStatusText" Text="" Foreground="#AAA" FontSize="11"
+                               TextAlignment="Center" Margin="0,0,0,8" Visibility="Collapsed"/>
+
+                    <!-- Multiple results list -->
+                    <ListBox x:Name="PlayerResultsList" Background="Transparent" BorderThickness="0"
+                             Margin="0,0,0,8" Visibility="Collapsed"
+                             SelectionChanged="PlayerResultsList_SelectionChanged">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,6" Margin="0,2"
+                                        Cursor="Hand">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding GuildName}" Foreground="#888" FontSize="10" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Player card -->
+                    <StackPanel x:Name="PlayerCard" Visibility="Collapsed">
+
+                        <!-- Avatar + name/guild -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="54" Height="54" CornerRadius="6" Background="#1A1A1A">
+                                <Image x:Name="PlayerAvatarImg" Stretch="UniformToFill"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="PlayerNameText" Foreground="White" FontSize="15" FontWeight="Bold"/>
+                                <TextBlock x:Name="PlayerGuildText" Foreground="#888" FontSize="11"/>
+                                <TextBlock x:Name="PlayerAllianceText" Foreground="#FF7550" FontSize="10"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Kill / Death / Ratio -->
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#22FFFFFF" CornerRadius="4" Padding="8,6" Margin="0,0,3,0">
+                                <StackPanel>
+                                    <TextBlock Text="KILLS FAME" Foreground="#4CAF50" FontSize="8" FontWeight="Bold"/>
+                                    <TextBlock x:Name="PlayerKillFameText" Foreground="#4CAF50" FontSize="11" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="#22FFFFFF" CornerRadius="4" Padding="8,6" Margin="3,0,3,0">
+                                <StackPanel>
+                                    <TextBlock Text="DEATH FAME" Foreground="#FF4444" FontSize="8" FontWeight="Bold"/>
+                                    <TextBlock x:Name="PlayerDeathFameText" Foreground="#FF4444" FontSize="11" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="4" Padding="8,6" Margin="3,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="RATIO" Foreground="#FF7550" FontSize="8" FontWeight="Bold"/>
+                                    <TextBlock x:Name="PlayerRatioText" Foreground="#FF7550" FontSize="11" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- PvE / Gathering / Crafting -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="0,0,3,0">
+                                <StackPanel>
+                                    <TextBlock Text="PvE FAME" Foreground="#888" FontSize="8"/>
+                                    <TextBlock x:Name="PlayerPvEText" Foreground="#CCC" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="3,0,3,0">
+                                <StackPanel>
+                                    <TextBlock Text="RECOLECCIÓN" Foreground="#888" FontSize="8"/>
+                                    <TextBlock x:Name="PlayerGatherText" Foreground="#CCC" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="3,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="CRAFTING" Foreground="#888" FontSize="8"/>
+                                    <TextBlock x:Name="PlayerCraftText" Foreground="#CCC" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+
+                    <TextBlock x:Name="PlayerErrorText" Text="" Foreground="#FF4444" FontSize="11"
+                               TextAlignment="Center" Visibility="Collapsed" Margin="0,8"/>
+                </StackPanel>
+
+            </StackPanel>
         </Grid>
     </Border>
 </Window>

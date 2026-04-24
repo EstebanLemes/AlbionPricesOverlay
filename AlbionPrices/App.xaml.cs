@@ -12,6 +12,7 @@ public partial class App : Application
     private MainWindow? _mainWindow;
     private UpdateService? _updateService;
     private RealtimePriceService? _realtimeService;
+    private GameInfoService? _gameInfoService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,6 +20,7 @@ public partial class App : Application
 
         _updateService    = new UpdateService("EstebanLemes", "AlbionPricesOverlay");
         _realtimeService  = new RealtimePriceService();
+        _gameInfoService  = new GameInfoService();
         _ = _realtimeService.ConnectAsync();
 
         _notifyIcon = new NotifyIcon
@@ -51,8 +53,9 @@ public partial class App : Application
         _mainWindow.SetNotifyIcon(_notifyIcon!);
     }
 
-    public UpdateService?      UpdateService     => _updateService;
-    public RealtimePriceService? RealtimeService => _realtimeService;
+    public UpdateService?        UpdateService    => _updateService;
+    public RealtimePriceService? RealtimeService  => _realtimeService;
+    public GameInfoService?      GameInfoService  => _gameInfoService;
 
     public void ShowMainWindow()
     {
