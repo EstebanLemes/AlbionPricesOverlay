@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows;
 using System.Windows.Forms;
+using AlbionPrices.Models;
 using AlbionPrices.Services;
 using Application = System.Windows.Application;
 
@@ -13,14 +14,22 @@ public partial class App : Application
     private UpdateService? _updateService;
     private RealtimePriceService? _realtimeService;
     private GameInfoService? _gameInfoService;
+    private AlbionApiService? _albionApiService;
+    private LocalHistoryService? _historyService;
+
+    public AppSettings Settings { get; private set; } = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        Settings = AppSettings.Load();
+
         _updateService    = new UpdateService("EstebanLemes", "AlbionPricesOverlay");
         _realtimeService  = new RealtimePriceService();
-        _gameInfoService  = new GameInfoService();
+        _gameInfoService  = new GameInfoService { Region = Settings.Region };
+        _albionApiService = new AlbionApiService { Region = Settings.Region };
+        _historyService   = new LocalHistoryService();
         _ = _realtimeService.ConnectAsync();
 
         _notifyIcon = new NotifyIcon
@@ -56,6 +65,16 @@ public partial class App : Application
     public UpdateService?        UpdateService    => _updateService;
     public RealtimePriceService? RealtimeService  => _realtimeService;
     public GameInfoService?      GameInfoService  => _gameInfoService;
+    public AlbionApiService?     AlbionApiService => _albionApiService;
+    public LocalHistoryService?  HistoryService   => _historyService;
+
+    public void ChangeRegion(ServerRegion region)
+    {
+        Settings.Region = region;
+        Settings.Save();
+        if (_gameInfoService  != null) _gameInfoService.Region  = region;
+        if (_albionApiService != null) _albionApiService.Region = region;
+    }
 
     public void ShowMainWindow()
     {

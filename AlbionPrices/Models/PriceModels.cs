@@ -58,6 +58,42 @@ public class ItemPriceSummary
     public CityPrices? BestSellCity => Prices.Where(p => p.SellAt > 0).OrderByDescending(p => p.SellAt).FirstOrDefault();
 }
 
+public class GoldPriceEntry
+{
+    [JsonPropertyName("price")]
+    public long Price { get; set; }
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class PriceHistoryEntry
+{
+    [JsonPropertyName("item_id")]
+    public string? ItemId { get; set; }
+
+    [JsonPropertyName("city")]
+    public string? City { get; set; }
+
+    [JsonPropertyName("quality")]
+    public int Quality { get; set; }
+
+    [JsonPropertyName("data")]
+    public List<PriceHistoryPoint>? Data { get; set; }
+}
+
+public class PriceHistoryPoint
+{
+    [JsonPropertyName("item_count")]
+    public int ItemCount { get; set; }
+
+    [JsonPropertyName("avg_price")]
+    public long AvgPrice { get; set; }
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
 public class CityPriceViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;

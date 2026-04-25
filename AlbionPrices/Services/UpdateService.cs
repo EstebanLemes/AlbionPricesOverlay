@@ -18,6 +18,7 @@ public class UpdateService
     public string? LatestVersion { get; private set; }
     public string? ReleaseNotes { get; private set; }
     public string? DownloadUrl { get; private set; }
+    public string? ReleasePageUrl { get; private set; }
     public bool IsUpdateAvailable { get; private set; }
     public Version CurrentVersion => _currentVersion;
 
@@ -65,6 +66,7 @@ public class UpdateService
 
             LatestVersion = release.TagName?.TrimStart('v');
             ReleaseNotes = release.Body;
+            ReleasePageUrl = release.HtmlUrl;
             System.Diagnostics.Debug.WriteLine($"Latest release tag: {LatestVersion}, assets: {release.Assets?.Count}");
 
             if (string.IsNullOrEmpty(LatestVersion)) return;
@@ -173,6 +175,8 @@ del ""%~f0""
     {
         [JsonPropertyName("tag_name")]
         public string? TagName { get; set; }
+        [JsonPropertyName("html_url")]
+        public string? HtmlUrl { get; set; }
         public string? Body { get; set; }
         public List<GitHubAsset>? Assets { get; set; }
     }

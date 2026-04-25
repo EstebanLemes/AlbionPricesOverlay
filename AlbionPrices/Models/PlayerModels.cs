@@ -35,7 +35,7 @@ public class PlayerSearchEntry
     public long DeathFame { get; set; }
 
     [JsonPropertyName("FameRatio")]
-    public double FameRatio { get; set; }
+    public double? FameRatio { get; set; }
 }
 
 public class GuildSearchEntry
@@ -70,6 +70,9 @@ public class PlayerInfo
     [JsonPropertyName("Name")]
     public string? Name { get; set; }
 
+    [JsonPropertyName("AverageItemPower")]
+    public double? AverageItemPower { get; set; }
+
     [JsonPropertyName("GuildId")]
     public string? GuildId { get; set; }
 
@@ -95,7 +98,7 @@ public class PlayerInfo
     public long DeathFame { get; set; }
 
     [JsonPropertyName("FameRatio")]
-    public double FameRatio { get; set; }
+    public double? FameRatio { get; set; }
 
     [JsonPropertyName("LifetimeStatistics")]
     public LifetimeStats? LifetimeStatistics { get; set; }
@@ -107,10 +110,17 @@ public class LifetimeStats
     public FameCategory? PvE { get; set; }
 
     [JsonPropertyName("Gathering")]
-    public FameCategory? Gathering { get; set; }
+    public GatheringStats? Gathering { get; set; }
 
     [JsonPropertyName("Crafting")]
     public FameCategory? Crafting { get; set; }
+}
+
+// Gathering has sub-categories; "All" holds the combined total.
+public class GatheringStats
+{
+    [JsonPropertyName("All")]
+    public FameCategory? All { get; set; }
 }
 
 public class FameCategory
@@ -147,4 +157,33 @@ public class KillParticipant
 
     [JsonPropertyName("GuildName")]
     public string? GuildName { get; set; }
+
+    [JsonPropertyName("Equipment")]
+    public KillEquipment? Equipment { get; set; }
+
+    [JsonPropertyName("AverageItemPower")]
+    public double? AverageItemPower { get; set; }
+}
+
+public class KillEquipment
+{
+    [JsonPropertyName("MainHand")] public EquipmentItem? MainHand { get; set; }
+    [JsonPropertyName("OffHand")]  public EquipmentItem? OffHand  { get; set; }
+    [JsonPropertyName("Head")]     public EquipmentItem? Head     { get; set; }
+    [JsonPropertyName("Armor")]    public EquipmentItem? Armor    { get; set; }
+    [JsonPropertyName("Shoes")]    public EquipmentItem? Shoes    { get; set; }
+    [JsonPropertyName("Bag")]      public EquipmentItem? Bag      { get; set; }
+    [JsonPropertyName("Cape")]     public EquipmentItem? Cape     { get; set; }
+    [JsonPropertyName("Mount")]    public EquipmentItem? Mount    { get; set; }
+    [JsonPropertyName("Potion")]   public EquipmentItem? Potion   { get; set; }
+    [JsonPropertyName("Food")]     public EquipmentItem? Food     { get; set; }
+}
+
+public class EquipmentItem
+{
+    [JsonPropertyName("Type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("Quality")]
+    public int Quality { get; set; }
 }

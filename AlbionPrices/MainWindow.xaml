@@ -55,13 +55,36 @@
 
                 <!-- Shared: update banner -->
                 <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11"
-                           FontWeight="Bold" TextAlignment="Center" Margin="0,0,0,10"
+                           FontWeight="Bold" TextAlignment="Center" Margin="0,0,0,8"
                            Cursor="Hand" MouseLeftButtonUp="UpdateBanner_Click" Visibility="Collapsed"/>
+
+                <!-- Shared: server region selector -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                    <TextBlock Text="Servidor:" Foreground="#555" FontSize="9" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <Button x:Name="RegionNABtn" Content="NA" Width="36" Height="18" FontSize="9" FontWeight="Bold"
+                            Background="Transparent" Foreground="#666" BorderThickness="1" BorderBrush="#333"
+                            Margin="0,0,3,0" Click="RegionNA_Click"/>
+                    <Button x:Name="RegionEUBtn" Content="EU" Width="36" Height="18" FontSize="9" FontWeight="Bold"
+                            Background="#FF7550" Foreground="White" BorderThickness="1" BorderBrush="#FF7550"
+                            Margin="0,0,3,0" Click="RegionEU_Click"/>
+                    <Button x:Name="RegionASBtn" Content="AS" Width="36" Height="18" FontSize="9" FontWeight="Bold"
+                            Background="Transparent" Foreground="#666" BorderThickness="1" BorderBrush="#333"
+                            Click="RegionAS_Click"/>
+                </StackPanel>
 
                 <!-- ═══════════════════ PRICE MODE ═══════════════════ -->
                 <StackPanel x:Name="PriceModeContent">
+
+                    <!-- Gold price indicator (price mode only) -->
+                    <StackPanel x:Name="GoldPriceRow" Orientation="Horizontal" HorizontalAlignment="Right"
+                                Margin="0,0,0,8" Visibility="Collapsed">
+                        <TextBlock Text="⬡ " Foreground="#FFD700" FontSize="9" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="GoldPriceText" Foreground="#FFD700" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock Text=" s/oro" Foreground="#555" FontSize="8" VerticalAlignment="Center"/>
+                    </StackPanel>
+
                     <TextBlock Text="Nombre del item:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
-                    <Grid Margin="0,0,0,15">
+                    <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -72,24 +95,50 @@
                                 BorderThickness="0" Padding="15,6" Margin="5,0,0,0" Click="CheckButton_Click"/>
                     </Grid>
 
-                    <TextBlock x:Name="StatusText" Text="Escribí el nombre del item" Foreground="#AAA" FontSize="11" TextAlignment="Center" Margin="0,5"/>
+                    <!-- Recent searches -->
+                    <StackPanel x:Name="RecentSearchesSection" Visibility="Collapsed" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="RECIENTES" Foreground="#555" FontSize="8" FontWeight="Bold"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Button x:Name="ClearHistoryBtn" Content="borrar" FontSize="7" Height="14" Padding="5,0"
+                                    Background="Transparent" Foreground="#444" BorderThickness="1" BorderBrush="#333"
+                                    Click="ClearHistory_Click"/>
+                        </StackPanel>
+                        <WrapPanel x:Name="RecentSearchChips"/>
+                    </StackPanel>
+
+                    <!-- Favorites -->
+                    <StackPanel x:Name="FavoritesSection" Visibility="Collapsed" Margin="0,0,0,8">
+                        <TextBlock Text="FAVORITOS" Foreground="#FFD700" FontSize="8" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <WrapPanel x:Name="FavoriteChips"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="StatusText" Text="Escribí el nombre del item" Foreground="#AAA" FontSize="11" TextAlignment="Center" Margin="0,0,0,5"/>
                     <TextBlock x:Name="DebugText" Text="" Foreground="#555" FontSize="9" TextAlignment="Center" Margin="0,2" Visibility="Collapsed"/>
 
                     <StackPanel x:Name="ItemInfoPanel" Visibility="Collapsed">
 
-                        <!-- Item header: icon + name -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Border Width="44" Height="44" CornerRadius="4" Background="#1A1A1A" Margin="0,0,10,0">
+                        <!-- Item header: icon + name/id + favorite star -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="4" Background="#1A1A1A" Margin="0,0,10,0">
                                 <Image x:Name="ItemIcon" Stretch="Uniform"/>
                             </Border>
-                            <StackPanel VerticalAlignment="Center">
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock x:Name="ItemNameText" Text="" Foreground="White" FontSize="14" FontWeight="SemiBold"/>
                                 <TextBlock x:Name="ItemIdText" Text="" Foreground="#888" FontSize="10"/>
                             </StackPanel>
-                        </StackPanel>
+                            <Button Grid.Column="2" x:Name="FavoriteBtn" Content="☆" Width="26" Height="26"
+                                    Background="Transparent" Foreground="#FFD700" BorderThickness="0"
+                                    FontSize="16" VerticalAlignment="Center" Click="FavoriteBtn_Click"/>
+                        </Grid>
 
                         <!-- Tier / Enchantment selectors -->
-                        <StackPanel x:Name="TierEnchantPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                        <StackPanel x:Name="TierEnchantPanel" Visibility="Collapsed" Margin="0,0,0,6">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Tier" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
                                 <WrapPanel x:Name="TierButtonsPanel"/>
@@ -97,6 +146,14 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Encant." Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
                                 <WrapPanel x:Name="EnchantButtonsPanel"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Quality selector -->
+                        <StackPanel x:Name="QualityPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Estado" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
+                                <WrapPanel x:Name="QualityButtonsPanel"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -116,7 +173,7 @@
                         </Border>
 
                         <!-- Best sell -->
-                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <Border Background="#22FFFFFF" CornerRadius="4" Padding="10" Margin="0,0,0,6">
                             <StackPanel>
                                 <TextBlock Text="MEJOR VENTA" Foreground="#FF5722" FontWeight="Bold" FontSize="11" Margin="0,0,0,4"/>
                                 <StackPanel Orientation="Horizontal">
@@ -129,6 +186,27 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+
+                        <!-- Flip calculator -->
+                        <Border x:Name="FlipCalcPanel" Visibility="Collapsed"
+                                Background="#1AFFD700" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                            <StackPanel>
+                                <TextBlock Text="FLIP ÓPTIMO" Foreground="#FFD700" FontWeight="Bold" FontSize="10" Margin="0,0,0,3"/>
+                                <TextBlock x:Name="FlipRouteText" Foreground="#AAA" FontSize="10" Margin="0,0,0,2"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Ganancia: " Foreground="#888" FontSize="11"/>
+                                    <TextBlock x:Name="FlipProfitText" Foreground="#FFD700" FontSize="11" FontWeight="Bold"/>
+                                </StackPanel>
+                                <TextBlock x:Name="FlipMarginText" Foreground="#666" FontSize="9" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Price history sparkline -->
+                        <StackPanel x:Name="PriceHistoryPanel" Visibility="Collapsed" Margin="0,0,0,8">
+                            <TextBlock x:Name="SparklineTitleText" Text="HISTORIAL" Foreground="#555"
+                                       FontSize="8" FontWeight="Bold" Margin="0,0,0,3"/>
+                            <Canvas x:Name="SparklineCanvas" Height="50" Background="#0AFFFFFF"/>
+                        </StackPanel>
 
                         <!-- Cities list -->
                         <ItemsControl x:Name="CitiesList">
@@ -198,8 +276,7 @@
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,6" Margin="0,2"
-                                        Cursor="Hand">
+                                <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,6" Margin="0,2" Cursor="Hand">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -216,23 +293,30 @@
                     <!-- Player card -->
                     <StackPanel x:Name="PlayerCard" Visibility="Collapsed">
 
-                        <!-- Avatar + name/guild -->
+                        <!-- Avatar + name/guild/IP/kills -->
                         <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="54" Height="54" CornerRadius="6" Background="#1A1A1A">
-                                <Image x:Name="PlayerAvatarImg" Stretch="UniformToFill"/>
+                            <Border Width="60" Height="60" CornerRadius="6" Background="#1A1A1A"
+                                    BorderBrush="#333" BorderThickness="1">
+                                <Image x:Name="PlayerAvatarImg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                             </Border>
                             <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="PlayerNameText" Foreground="White" FontSize="15" FontWeight="Bold"/>
                                 <TextBlock x:Name="PlayerGuildText" Foreground="#888" FontSize="11"/>
                                 <TextBlock x:Name="PlayerAllianceText" Foreground="#FF7550" FontSize="10"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="IP: " Foreground="#555" FontSize="9"/>
+                                    <TextBlock x:Name="PlayerIPText" Foreground="#AAA" FontSize="9"/>
+                                    <TextBlock Text="  Kills: " Foreground="#555" FontSize="9"/>
+                                    <TextBlock x:Name="PlayerKillCountText" Foreground="#4CAF50" FontSize="9"/>
+                                </StackPanel>
                             </StackPanel>
                         </Grid>
 
-                        <!-- Kill / Death / Ratio -->
+                        <!-- Kill Fame / Death Fame / Ratio -->
                         <Grid Margin="0,0,0,5">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -253,14 +337,14 @@
                             </Border>
                             <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="4" Padding="8,6" Margin="3,0,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="RATIO" Foreground="#FF7550" FontSize="8" FontWeight="Bold"/>
+                                    <TextBlock Text="K/D RATIO" Foreground="#FF7550" FontSize="8" FontWeight="Bold"/>
                                     <TextBlock x:Name="PlayerRatioText" Foreground="#FF7550" FontSize="11" FontWeight="Bold"/>
                                 </StackPanel>
                             </Border>
                         </Grid>
 
                         <!-- PvE / Gathering / Crafting -->
-                        <Grid>
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
@@ -285,6 +369,57 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
+
+                        <!-- Last equipment set — Albion-style grid layout -->
+                        <StackPanel x:Name="LastEquipPanel" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="ÚLTIMO SET" Foreground="#666" FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="LastSeenAgoText" Foreground="#444" FontSize="8" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <!-- 3-col × 4-row grid matching Albion's in-game inventory screen:
+                                 Row 0: [Bolso]    [Cabeza]   [Capa]
+                                 Row 1: [MH]       [Armadura] [OH]
+                                 Row 2: [Poción]   [Zapatos]  [Comida]
+                                 Row 3:            [Montura]             -->
+                            <Grid x:Name="EquipmentSlotsGrid" HorizontalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="46"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="46"/>
+                                    <RowDefinition Height="46"/>
+                                    <RowDefinition Height="46"/>
+                                    <RowDefinition Height="46"/>
+                                </Grid.RowDefinitions>
+                            </Grid>
+                            <TextBlock x:Name="SetValueText" Foreground="#FFD700" FontSize="9"
+                                       TextAlignment="Center" Margin="0,5,0,0" Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <!-- Recent deaths -->
+                        <StackPanel x:Name="RecentDeathsPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                            <TextBlock Text="ÚLTIMAS MUERTES" Foreground="#FF4444" FontSize="8" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <ItemsControl x:Name="DeathsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="0,2">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding KillerName}" Foreground="#FF6666" FontSize="10" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding KillerGuild}" Foreground="#666" FontSize="9" VerticalAlignment="Center" Margin="6,0"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding TimeAgo}" Foreground="#555" FontSize="9" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
 
                     </StackPanel>
 
