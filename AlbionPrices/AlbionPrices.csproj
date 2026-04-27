@@ -9,9 +9,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <StartupObject>Program</StartupObject>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.0.12</Version>
-    <FileVersion>1.0.12</FileVersion>
-    <AssemblyVersion>1.0.12</AssemblyVersion>
+    <Version>1.0.13</Version>
+    <FileVersion>1.0.13</FileVersion>
+    <AssemblyVersion>1.0.13</AssemblyVersion>
   </PropertyGroup>
 
   <!-- Define WINDOWS when building on Windows so #if WINDOWS guards compile correctly -->
@@ -47,6 +47,7 @@
   </ItemGroup>
 
 </Project>
+
 
 
 

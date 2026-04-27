@@ -46,6 +46,8 @@ public class CityPrices
     public DateTime? BuyAtDate { get; set; }
     public double SellAt { get; set; }
     public DateTime? SellAtDate { get; set; }
+    public int SellAmount { get; set; }
+    public int BuyAmount  { get; set; }
 }
 
 public class ItemPriceSummary
@@ -106,19 +108,21 @@ public class CityPriceViewModel : INotifyPropertyChanged
     private double _sellAt;
     private DateTime? _buyAtDate;
     private DateTime? _sellAtDate;
+    private int _sellAmount;
+    private int _buyAmount;
 
     public string City { get; set; } = "";
 
     public double BuyAt
     {
         get => _buyAt;
-        set { _buyAt = value; Notify(nameof(BuyAtLabel)); }
+        set { _buyAt = value; Notify(nameof(BuyAtLabel)); Notify(nameof(BuyAtFull)); }
     }
 
     public double SellAt
     {
         get => _sellAt;
-        set { _sellAt = value; Notify(nameof(SellAtLabel)); }
+        set { _sellAt = value; Notify(nameof(SellAtLabel)); Notify(nameof(SellAtFull)); }
     }
 
     public DateTime? BuyAtDate
@@ -133,10 +137,26 @@ public class CityPriceViewModel : INotifyPropertyChanged
         set { _sellAtDate = value; Notify(nameof(SellAtAgo)); }
     }
 
-    public string BuyAtLabel  => BuyAt  > 0 ? $"{BuyAt:N0}"  : "—";
-    public string SellAtLabel => SellAt > 0 ? $"{SellAt:N0}" : "—";
-    public string BuyAtAgo    => FormatAgo(BuyAtDate);
-    public string SellAtAgo   => FormatAgo(SellAtDate);
+    public int SellAmount
+    {
+        get => _sellAmount;
+        set { _sellAmount = value; Notify(nameof(SellAmountLabel)); Notify(nameof(BuyAtFull)); }
+    }
+
+    public int BuyAmount
+    {
+        get => _buyAmount;
+        set { _buyAmount = value; Notify(nameof(BuyAmountLabel)); Notify(nameof(SellAtFull)); }
+    }
+
+    public string BuyAtLabel      => BuyAt  > 0 ? $"{BuyAt:N0}"  : "—";
+    public string SellAtLabel     => SellAt > 0 ? $"{SellAt:N0}" : "—";
+    public string BuyAtAgo        => FormatAgo(BuyAtDate);
+    public string SellAtAgo       => FormatAgo(SellAtDate);
+    public string SellAmountLabel => SellAmount > 0 ? $"×{SellAmount}" : "";
+    public string BuyAmountLabel  => BuyAmount  > 0 ? $"×{BuyAmount}"  : "";
+    public string BuyAtFull       => BuyAt  > 0 ? (SellAmount > 0 ? $"{BuyAt:N0}  ×{SellAmount}" : $"{BuyAt:N0}") : "—";
+    public string SellAtFull      => SellAt > 0 ? (BuyAmount  > 0 ? $"{SellAt:N0}  ×{BuyAmount}"  : $"{SellAt:N0}") : "—";
 
     private void Notify(string name) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -150,4 +170,37 @@ public class CityPriceViewModel : INotifyPropertyChanged
         if (diff.TotalHours < 24)   return $"hace {(int)diff.TotalHours}h";
         return $"hace {(int)diff.TotalDays}d";
     }
+}
+
+public class FlipOpportunity
+{
+    public string ItemId    { get; set; } = "";
+    public string ItemName  { get; set; } = "";
+    public string TierLabel { get; set; } = "";
+    public int    Quality   { get; set; } = 1;
+    public string BuyCity   { get; set; } = "";
+    public double BuyPrice  { get; set; }
+    public string SellCity  { get; set; } = "";
+    public double SellPrice { get; set; }
+    public double Profit    { get; set; }
+    public double ProfitPct { get; set; }
+
+    public int    BuyVolume      { get; set; }
+    public int    SellVolume     { get; set; }
+
+    public string QualityLabel => Quality switch
+    {
+        2 => "Buena",
+        3 => "Dest.",
+        4 => "Exc.",
+        5 => "Obra",
+        _ => "Nor.",
+    };
+
+    public string BuyPriceLabel  => $"{BuyPrice:N0}s";
+    public string SellPriceLabel => $"{SellPrice:N0}s";
+    public string ProfitLabel    => $"+{Profit:N0}s";
+    public string ProfitPctLabel => $"+{ProfitPct:F1}%";
+    public string BuyVolumeLabel  => BuyVolume  > 0 ? $"×{BuyVolume}"  : "";
+    public string SellVolumeLabel => SellVolume > 0 ? $"×{SellVolume}" : "";
 }

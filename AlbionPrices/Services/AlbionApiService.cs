@@ -73,6 +73,8 @@ public class AlbionApiService
                         BuyAtDate  = buyEntry?.SellPriceMinDate,
                         SellAt     = sellAt,
                         SellAtDate = sellEntry?.BuyPriceMaxDate,
+                        SellAmount = group.Sum(p => p.SellAmount ?? 0),
+                        BuyAmount  = group.Sum(p => p.BuyAmount  ?? 0),
                     });
                 }
             }
@@ -101,6 +103,26 @@ public class AlbionApiService
             return list?.FirstOrDefault();
         }
         catch { return null; }
+    }
+
+    public async Task<List<PriceApiResponse>?> GetBatchPricesAsync(IEnumerable<string> itemIds, CancellationToken ct = default)
+    {
+        try
+        {
+            var url = $"{StatsBaseUrls[Region]}/prices/{string.Join(",", itemIds)}.json?qualities=1,2,3";
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(20));
+            var response = await _httpClient.GetStringAsync(url, cts.Token);
+            if (string.IsNullOrWhiteSpace(response) || response == "[]" || response.StartsWith("<"))
+                return null;
+            return JsonSerializer.Deserialize<List<PriceApiResponse>>(response);
+        }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Batch fetch error: {ex.Message}");
+            return null;
+        }
     }
 
     public async Task<List<PriceHistoryEntry>?> GetPriceHistoryAsync(string itemId, int quality = 1, int timeScale = 24, CancellationToken ct = default)

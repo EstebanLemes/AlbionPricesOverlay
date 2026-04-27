@@ -77,6 +77,42 @@ public partial class MainWindow : Window
         ["Piedra"]  = "Fort Sterling",
     };
 
+    // ── Flip scanner state ───────────────────────────────────────────────────
+    private bool _flipScanInitialized;
+    private DispatcherTimer? _scanTimer;
+    private CancellationTokenSource? _scanCts;
+    private string? _flipOrigin;
+    private string? _flipDest;
+    private bool _flipPremium = false;
+    private List<PriceApiResponse> _rawScanData = new();
+    private List<FlipOpportunity> _rawFlipResults = new();
+    private Button[]? _flipOriginBtns;
+    private Button[]? _flipDestBtns;
+
+    private static readonly string[] FlipCities =
+    [
+        "Todos", "Thetford", "Lymhurst", "Bridgewatch", "Fort Sterling",
+        "Martlock", "Caerleon", "Brecilien",
+    ];
+
+    private static readonly string[] ScanBaseTypes = [
+        "MAIN_SWORD", "MAIN_AXE", "MAIN_DAGGER", "MAIN_SPEAR", "MAIN_MACE",
+        "MAIN_FIRESTAFF", "MAIN_HOLYSTAFF", "MAIN_NATURESTAFF", "MAIN_ARCANESTAFF",
+        "MAIN_CURSEDSTAFF", "MAIN_FROSTSTAFF", "MAIN_BOW",
+        "2H_SWORD", "2H_AXE", "2H_HAMMER", "2H_BOW", "2H_CROSSBOW",
+        "2H_DAGGERPAIR", "2H_SPEAR", "2H_FIRESTAFF", "2H_HOLYSTAFF",
+        "2H_NATURESTAFF", "2H_ARCANESTAFF", "2H_CURSEDSTAFF", "2H_FROSTSTAFF",
+        "OFF_SHIELD", "OFF_TOTEM", "OFF_BOOK", "OFF_ORB",
+        "HEAD_PLATE", "ARMOR_PLATE", "SHOES_PLATE",
+        "HEAD_LEATHER", "ARMOR_LEATHER", "SHOES_LEATHER",
+        "HEAD_CLOTH", "ARMOR_CLOTH", "SHOES_CLOTH",
+        "BAG", "CAPE",
+    ];
+
+    private static readonly (int Tier, int Enchant)[] ScanTierCombos = [
+        (4, 3), (5, 1), (5, 2), (5, 3), (6, 1), (6, 2), (6, 3), (7, 1), (7, 2),
+    ];
+
     // ── Enchanting state ──────────────────────────────────────────────────────
     private string? _enchantBaseId;
 
@@ -120,10 +156,11 @@ public partial class MainWindow : Window
         Loaded += async (s, e) =>
         {
             _regionButtons = [RegionNABtn, RegionEUBtn, RegionASBtn];
-            _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn];
+            _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn, FlipModeBtn];
             _calcSubBtns   = [CraftSubBtn, RefineSubBtn, EnchantSubBtn, RouteSubBtn];
             InitRefineSelectors();
             InitRoutePanel();
+            InitFlipCitySelectors();
             var savedRegion = (Application.Current as App)?.Settings.Region
                               ?? ServerRegion.Europe;
             RefreshRegionButtons(savedRegion);
@@ -138,6 +175,10 @@ public partial class MainWindow : Window
 
             RefreshHistoryUI();
             _ = LoadGoldPriceAsync();
+
+            _scanTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(1) };
+            _scanTimer.Tick += async (_, _) => await ScanFlipOpportunitiesAsync();
+            _scanTimer.Start();
 
             try
             {
@@ -171,6 +212,8 @@ public partial class MainWindow : Window
     {
         _hotkey?.Dispose();
         _watchTimer?.Stop();
+        _scanTimer?.Stop();
+        _scanCts?.Cancel();
     }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
@@ -213,6 +256,7 @@ public partial class MainWindow : Window
         CraftingModeContent.IsVisible = active == CraftingModeContent;
         WatchModeContent.IsVisible    = active == WatchModeContent;
         PlayerModeContent.IsVisible   = active == PlayerModeContent;
+        FlipModeContent.IsVisible     = active == FlipModeContent;
 
         foreach (var btn in _modeBtns ?? [])
         {
@@ -269,6 +313,251 @@ public partial class MainWindow : Window
         SetActiveMode(PlayerModeContent, PlayerModeBtn);
         (Application.Current as App)?.RealtimeService?.SetItem(null);
         PlayerInput.Focus();
+    }
+
+    private void FlipMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(FlipModeContent, FlipModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+        if (!_flipScanInitialized)
+        {
+            _flipScanInitialized = true;
+            _ = ScanFlipOpportunitiesAsync();
+        }
+    }
+
+    private async void ScanNow_Click(object? sender, RoutedEventArgs e) =>
+        await ScanFlipOpportunitiesAsync();
+
+    private void FlipItem_Click(object? sender, PointerReleasedEventArgs e)
+    {
+        if ((sender as Border)?.DataContext is not FlipOpportunity opp) return;
+        SetActiveMode(PriceModeContent, PriceModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+        _ = CheckItemById(opp.ItemId, opp.ItemName, opp.Quality);
+    }
+
+    // ── Flip scanner ─────────────────────────────────────────────────────────
+
+    private static IEnumerable<string> GenerateScanIds()
+    {
+        foreach (var (tier, enc) in ScanTierCombos)
+            foreach (var type in ScanBaseTypes)
+                yield return $"T{tier}_{type}@{enc}";
+    }
+
+    private async Task ScanFlipOpportunitiesAsync()
+    {
+        _scanCts?.Cancel();
+        _scanCts = new CancellationTokenSource();
+        var ct = _scanCts.Token;
+
+        ScanNowBtn.IsEnabled  = false;
+        FlipStatusText.Text      = "Escaneando...";
+        FlipStatusText.IsVisible = true;
+
+        try
+        {
+            var allIds  = GenerateScanIds().ToList();
+            var batches = allIds.Chunk(25).ToList();
+            var allRaw  = new System.Collections.Concurrent.ConcurrentBag<PriceApiResponse>();
+            int done    = 0;
+
+            var sem   = new SemaphoreSlim(4);
+            var tasks = batches.Select(async batch =>
+            {
+                await sem.WaitAsync(ct);
+                try
+                {
+                    var rows = await _apiService.GetBatchPricesAsync(batch, ct);
+                    if (rows != null)
+                        foreach (var r in rows) allRaw.Add(r);
+
+                    var n = Interlocked.Increment(ref done);
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                        FlipStatusText.Text = $"Escaneando... {n}/{batches.Count}");
+                }
+                finally { sem.Release(); }
+            }).ToList();
+
+            await Task.WhenAll(tasks);
+            ct.ThrowIfCancellationRequested();
+
+            _rawScanData    = allRaw.ToList();
+            _rawFlipResults = BuildFlipOpportunities(_rawScanData, _flipPremium ? 0.04 : 0.08);
+            FlipLastScanText.Text = $"Escaneado: {DateTime.Now:HH:mm}";
+            ApplyFlipFilters();
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            FlipStatusText.IsVisible = false;
+            ScanNowBtn.IsEnabled     = true;
+        }
+    }
+
+    private List<FlipOpportunity> BuildFlipOpportunities(List<PriceApiResponse> raw, double taxRate = 0.08)
+    {
+        var result = new List<FlipOpportunity>();
+        var cutoff = DateTime.UtcNow.AddHours(-72);
+
+        // Group by (itemId, quality) so we never mix qualities across cities
+        foreach (var group in raw
+            .Where(r => r.ItemId != null)
+            .GroupBy(r => (r.ItemId!, r.Quality ?? 1)))
+        {
+            var (itemId, quality) = group.Key;
+
+            var cities = group
+                .Where(p => p.City != null
+                         && p.SellPriceMin > 0
+                         && p.SellPriceMinDate.HasValue
+                         && p.SellPriceMinDate.Value.ToUniversalTime() >= cutoff)
+                .GroupBy(p => p.City!)
+                .Select(g => (
+                    City:           g.Key,
+                    SellOrderPrice: g.Min(p => p.SellPriceMin!.Value),
+                    Volume:         g.Sum(p => p.SellAmount ?? 0)))
+                .Where(c => c.SellOrderPrice > 0)
+                .ToList();
+
+            if (cities.Count < 2) continue;
+
+            var cheapestCity = cities.MinBy(c => c.SellOrderPrice);
+            var pricestCity  = cities.MaxBy(c => c.SellOrderPrice);
+            if (cheapestCity.City == pricestCity.City) continue;
+
+            // Descartar outliers: ratio > 4x es casi siempre una orden stale
+            if (pricestCity.SellOrderPrice / cheapestCity.SellOrderPrice > 4.0) continue;
+
+            var profit = pricestCity.SellOrderPrice * (1 - taxRate) - cheapestCity.SellOrderPrice;
+            if (profit <= 0) continue;
+
+            var m    = TieredItemRegex.Match(itemId);
+            var tier = m.Success ? m.Groups[1].Value : "";
+            var enc  = m.Success ? m.Groups[3].Value : "";
+
+            var baseName = _itemDatabase.GetNameById(itemId)
+                        ?? _itemDatabase.GetNameById(itemId.Split('@')[0])
+                        ?? itemId;
+
+            result.Add(new FlipOpportunity
+            {
+                ItemId     = itemId,
+                ItemName   = baseName,
+                TierLabel  = enc.Length > 0 ? $"T{tier}.{enc}" : $"T{tier}",
+                Quality    = quality,
+                BuyCity    = cheapestCity.City,
+                BuyPrice   = cheapestCity.SellOrderPrice,
+                BuyVolume  = cheapestCity.Volume,
+                SellCity   = pricestCity.City,
+                SellPrice  = pricestCity.SellOrderPrice,
+                SellVolume = pricestCity.Volume,
+                Profit     = profit,
+                ProfitPct  = profit / cheapestCity.SellOrderPrice * 100,
+            });
+        }
+
+        return result;
+    }
+
+    private void ApplyFlipFilters()
+    {
+        double minProfit = double.TryParse(MinFlipProfitInput.Text, out var mp) ? mp : 1000;
+        var opps = _rawFlipResults
+            .Where(o => o.Profit >= minProfit)
+            .Where(o => _flipOrigin == null || o.BuyCity  == _flipOrigin)
+            .Where(o => _flipDest   == null || o.SellCity == _flipDest)
+            .OrderByDescending(o => o.Profit)
+            .Take(60)
+            .ToList();
+
+        FlipList.ItemsSource = opps;
+        FlipCountText.Text   = $"{opps.Count} resultados";
+    }
+
+    private void FlipProfitFilter_Changed(object? sender, Avalonia.Controls.TextChangedEventArgs e) =>
+        ApplyFlipFilters();
+
+    private void FlipPremium_Changed(object? sender, RoutedEventArgs e)
+    {
+        _flipPremium    = PremiumCheckBox.IsChecked == true;
+        if (_rawScanData.Count > 0)
+        {
+            _rawFlipResults = BuildFlipOpportunities(_rawScanData, _flipPremium ? 0.04 : 0.08);
+            ApplyFlipFilters();
+        }
+    }
+
+    private void InitFlipCitySelectors()
+    {
+        _flipOriginBtns = FlipCities.Select(_ => MakeCityFilterBtn()).ToArray();
+        _flipDestBtns   = FlipCities.Select(_ => MakeCityFilterBtn()).ToArray();
+
+        for (var i = 0; i < FlipCities.Length; i++)
+        {
+            var city    = FlipCities[i];
+            var origBtn = _flipOriginBtns[i];
+            var destBtn = _flipDestBtns[i];
+
+            origBtn.Content = CityShort(city);
+            origBtn.Click  += (_, _) =>
+            {
+                _flipOrigin = city == "Todos" ? null : city;
+                HighlightCityBtn(_flipOriginBtns, origBtn);
+                ApplyFlipFilters();
+            };
+
+            destBtn.Content = CityShort(city);
+            destBtn.Click  += (_, _) =>
+            {
+                _flipDest = city == "Todos" ? null : city;
+                HighlightCityBtn(_flipDestBtns, destBtn);
+                ApplyFlipFilters();
+            };
+
+            FlipOriginPanel.Children.Add(origBtn);
+            FlipDestPanel.Children.Add(destBtn);
+        }
+
+        HighlightCityBtn(_flipOriginBtns, _flipOriginBtns[0]);
+        HighlightCityBtn(_flipDestBtns,   _flipDestBtns[0]);
+    }
+
+    private static string CityShort(string city) => city switch
+    {
+        "Fort Sterling" => "Fort St.",
+        "Bridgewatch"   => "Bridge.",
+        "Brecilien"     => "Brecil.",
+        _               => city,
+    };
+
+    private static Button MakeCityFilterBtn() => new()
+    {
+        FontSize        = 8,
+        Height          = 16,
+        Padding         = new Thickness(4, 0),
+        MinHeight       = 0,
+        Margin          = new Thickness(0, 0, 2, 2),
+        Background      = new SolidColorBrush(Color.FromRgb(30, 30, 35)),
+        Foreground      = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
+        BorderThickness = new Thickness(1),
+        BorderBrush     = new SolidColorBrush(Color.FromRgb(50, 50, 55)),
+        CornerRadius    = new CornerRadius(3),
+    };
+
+    private static void HighlightCityBtn(Button[] btns, Button active)
+    {
+        foreach (var b in btns)
+        {
+            var isActive = b == active;
+            b.Background = new SolidColorBrush(isActive
+                ? Color.FromRgb(55, 55, 90)
+                : Color.FromRgb(30, 30, 35));
+            b.Foreground = new SolidColorBrush(isActive
+                ? Color.FromRgb(180, 180, 230)
+                : Color.FromRgb(120, 120, 130));
+        }
     }
 
     // ── Gold price ───────────────────────────────────────────────────────────
@@ -402,23 +691,26 @@ public partial class MainWindow : Window
         var bestBuy = summary.BestBuyCity;
         if (bestBuy != null)
         {
-            BestBuyCityText.Text  = bestBuy.City;
-            BestBuyPriceText.Text = $"{bestBuy.BuyAt:N0}";
-            _currentBestBuyPrice  = bestBuy.BuyAt;
+            BestBuyCityText.Text   = bestBuy.City;
+            BestBuyPriceText.Text  = $"{bestBuy.BuyAt:N0}";
+            BestBuyVolumeText.Text = bestBuy.SellAmount > 0 ? $"×{bestBuy.SellAmount} órd." : "";
+            _currentBestBuyPrice   = bestBuy.BuyAt;
         }
 
         var bestSell = summary.BestSellOrderCity;
         if (bestSell != null)
         {
-            BestSellCityText.Text  = bestSell.City;
-            BestSellPriceText.Text = $"{bestSell.BuyAt:N0}";
+            BestSellCityText.Text   = bestSell.City;
+            BestSellPriceText.Text  = $"{bestSell.BuyAt:N0}";
+            BestSellVolumeText.Text = bestSell.SellAmount > 0 ? $"×{bestSell.SellAmount} órd." : "";
         }
 
         var bestInstant = summary.BestInstantSellCity;
         if (bestInstant != null)
         {
-            BestInstantCityText.Text  = bestInstant.City;
-            BestInstantPriceText.Text = $"{bestInstant.SellAt:N0}";
+            BestInstantCityText.Text   = bestInstant.City;
+            BestInstantPriceText.Text  = $"{bestInstant.SellAt:N0}";
+            BestInstantVolumeText.Text = bestInstant.BuyAmount > 0 ? $"×{bestInstant.BuyAmount} órd." : "";
         }
 
         var vms = summary.Prices.Select(p => new CityPriceViewModel
@@ -428,6 +720,8 @@ public partial class MainWindow : Window
             BuyAtDate  = p.BuyAtDate,
             SellAt     = p.SellAt,
             SellAtDate = p.SellAtDate,
+            SellAmount = p.SellAmount,
+            BuyAmount  = p.BuyAmount,
         }).ToList();
 
         _cityViewModels.Clear();
@@ -711,6 +1005,7 @@ public partial class MainWindow : Window
             StatusText.IsVisible  = true;
             ErrorText.IsVisible   = false;
             BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = BestInstantCityText.Text = BestInstantPriceText.Text = "…";
+            BestBuyVolumeText.Text = BestSellVolumeText.Text = BestInstantVolumeText.Text = "";
             CitiesList.ItemsSource = null;
 
             var ct      = _cts.Token;
@@ -722,6 +1017,7 @@ public partial class MainWindow : Window
                 ErrorText.Text      = $"Sin datos para: {itemId}";
                 ErrorText.IsVisible = true;
                 BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = BestInstantCityText.Text = BestInstantPriceText.Text = "—";
+                BestBuyVolumeText.Text = BestSellVolumeText.Text = BestInstantVolumeText.Text = "";
                 return;
             }
 
@@ -971,6 +1267,17 @@ public partial class MainWindow : Window
                 var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(3) };
                 border.Child = img;
                 _ = LoadImageFromUrlAsync(img, GameInfoService.GetItemIconUrl(item.Type));
+
+                var capturedId      = item.Type;
+                var capturedName    = itemName ?? item.Type;
+                var capturedQuality = item.Quality;
+                border.Cursor = new Cursor(StandardCursorType.Hand);
+                border.PointerReleased += (_, _) =>
+                {
+                    SetActiveMode(PriceModeContent, PriceModeBtn);
+                    (Application.Current as App)?.RealtimeService?.SetItem(null);
+                    _ = CheckItemById(capturedId, capturedName, capturedQuality);
+                };
             }
 
             Grid.SetRow(border, row);
@@ -1155,7 +1462,7 @@ public partial class MainWindow : Window
             await CheckItem(ItemInput.Text ?? "");
     }
 
-    private async Task CheckItemById(string itemId, string itemName)
+    private async Task CheckItemById(string itemId, string itemName, int quality = 1)
     {
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
@@ -1163,15 +1470,15 @@ public partial class MainWindow : Window
 
         try
         {
-            ItemInput.Text        = itemName;
-            StatusText.Text       = "Buscando...";
-            StatusText.IsVisible  = true;
+            ItemInput.Text          = itemName;
+            StatusText.Text         = "Buscando...";
+            StatusText.IsVisible    = true;
             ItemInfoPanel.IsVisible = false;
             ErrorText.IsVisible     = false;
 
-            _currentQuality = 1;
+            _currentQuality = quality;
             var ct      = _cts.Token;
-            var summary = await _apiService.GetItemPriceAsync(itemId, 1, ct);
+            var summary = await _apiService.GetItemPriceAsync(itemId, quality, ct);
             StatusText.IsVisible = false;
 
             if (summary == null || summary.Prices.Count == 0)
@@ -1182,7 +1489,13 @@ public partial class MainWindow : Window
 
             summary.ItemName = _itemDatabase.GetNameById(itemId) ?? itemName;
             DisplayPriceInfo(summary);
-            _ = LoadPriceHistoryAsync(itemId, 1, ct);
+            // SetupQualityButtons resets to 1, so restore the requested quality after
+            if (quality > 1 && quality <= QualityLabels.Length)
+            {
+                _currentQuality = quality;
+                RefreshButtonSelection(QualityButtonsPanel, QualityLabels[quality - 1]);
+            }
+            _ = LoadPriceHistoryAsync(itemId, quality, ct);
             ShowCentered();
         }
         catch (OperationCanceledException) { }
