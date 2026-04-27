@@ -9,8 +9,10 @@ namespace AlbionPrices.Helpers;
 
 public class ScreenCapture : IDisposable
 {
+#if WINDOWS
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
+#endif
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -57,10 +59,14 @@ public class ScreenCapture : IDisposable
 
     public static Rectangle GetTooltipArea(int width = 350, int height = 40)
     {
+#if WINDOWS
         GetCursorPos(out POINT cursor);
         int x = Math.Max(0, cursor.X - width + 30);
         int y = Math.Max(0, cursor.Y - height - 3);
         return new Rectangle(x, y, width, height);
+#else
+        return new Rectangle(0, 0, width, height);
+#endif
     }
 
     public static Bitmap Capture(Rectangle area)

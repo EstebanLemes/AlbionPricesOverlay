@@ -54,8 +54,12 @@ public class ItemPriceSummary
     public string ItemName { get; set; } = string.Empty;
     public List<CityPrices> Prices { get; set; } = new();
 
+    // Cheapest sell order = lowest price to buy the item
     public CityPrices? BestBuyCity => Prices.Where(p => p.BuyAt > 0).OrderBy(p => p.BuyAt).FirstOrDefault();
-    public CityPrices? BestSellCity => Prices.Where(p => p.SellAt > 0).OrderByDescending(p => p.SellAt).FirstOrDefault();
+    // Most expensive sell order = best reference price to list your own sell order
+    public CityPrices? BestSellOrderCity => Prices.Where(p => p.BuyAt > 0).OrderByDescending(p => p.BuyAt).FirstOrDefault();
+    // Highest buy order = best price for an instant sale to an existing buyer
+    public CityPrices? BestInstantSellCity => Prices.Where(p => p.SellAt > 0).OrderByDescending(p => p.SellAt).FirstOrDefault();
 }
 
 public class GoldPriceEntry

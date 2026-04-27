@@ -2,28 +2,35 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>AlbionPrices</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <StartupObject>AlbionPrices.App</StartupObject>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <StartupObject>Program</StartupObject>
     <ApplicationIcon>app.ico</ApplicationIcon>
-<Version>1.0.8</Version>
-    <FileVersion>1.0.8</FileVersion>
-    <AssemblyVersion>1.0.8</AssemblyVersion>
+    <Version>1.0.12</Version>
+    <FileVersion>1.0.12</FileVersion>
+    <AssemblyVersion>1.0.12</AssemblyVersion>
+  </PropertyGroup>
+
+  <!-- Define WINDOWS when building on Windows so #if WINDOWS guards compile correctly -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
     <PackageReference Include="NATS.Net" Version="2.*" />
     <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="System.Drawing.Common" Version="9.*" />
+  </ItemGroup>
+
+  <!-- Tell Avalonia's build tasks to process all XAML files -->
+  <ItemGroup>
+    <AvaloniaXaml Include="**\*.xaml" Exclude="obj\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,6 +47,10 @@
   </ItemGroup>
 
 </Project>
+
+
+
+
 
 
 

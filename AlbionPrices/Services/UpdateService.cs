@@ -162,7 +162,7 @@ del ""%~f0""
             });
 
             UpdateDownloaded?.Invoke(this, LatestVersion ?? "");
-            System.Windows.Application.Current.Shutdown();
+            Environment.Exit(0);
         }
         catch (Exception ex)
         {

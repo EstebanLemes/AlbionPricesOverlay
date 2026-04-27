@@ -1,48 +1,87 @@
 using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using AlbionPrices.Helpers;
 using AlbionPrices.Models;
 using AlbionPrices.Services;
-using Brushes = System.Windows.Media.Brushes;
-using Button = System.Windows.Controls.Button;
-using Color = System.Windows.Media.Color;
-using NotifyIcon = System.Windows.Forms.NotifyIcon;
-using Point = System.Windows.Point;
 
 namespace AlbionPrices;
 
 public partial class MainWindow : Window
 {
     private readonly AlbionApiService _apiService;
-    private readonly ItemDatabase _itemDatabase;
-    private Button[]? _regionButtons;
+    private readonly ItemDatabase     _itemDatabase;
+    private Button[]?  _regionButtons;
     private GlobalHotkey? _hotkey;
     private bool _isLoading;
     private bool _dbLoaded;
-    private NotifyIcon? _notifyIcon;
-    private System.Windows.Threading.DispatcherTimer? _hideTimer;
+    private bool _dialogOpen;
+    private DispatcherTimer? _hideTimer;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _playerCts;
     private CancellationTokenSource? _setValueCts;
 
     private string? _baseId;
-    private int _currentTier;
-    private int _currentEnchant;
-    private int _currentQuality = 1;
+    private int  _currentTier;
+    private int  _currentEnchant;
+    private int  _currentQuality = 1;
     private Dictionary<int, List<int>> _variants = new();
     private string? _currentItemId;
     private string? _currentItemName;
 
     private List<PriceHistoryPoint>? _sparklineData;
-
+    private Size _lastSparklineBounds;
     private readonly Dictionary<string, CityPriceViewModel> _cityViewModels = new();
+    private double _currentBestBuyPrice;
+
+    private DispatcherTimer? _watchTimer;
+    private int              _watchSecondsLeft;
+    private const int        WatchIntervalSeconds = 300;
+
+    private string?               _craftTargetId;
+    private string?               _craftTargetName;
+    private double                _craftTargetSellPrice;
+    private readonly List<CraftMaterial> _craftMaterials = new();
+
+    private Button[]? _modeBtns;
+    private Button[]? _calcSubBtns;
+
+    // ── Refining state ────────────────────────────────────────────────────────
+    private string _refineResource = "Mineral";
+    private int    _refineTier     = 5;
+    private string _refineCity     = "Thetford";
+    private bool   _refineFocus    = false;
+
+    private static readonly Dictionary<string, (string Raw, string Refined)> ResourceIds = new()
+    {
+        ["Mineral"] = ("ORE",   "METALBAR"),
+        ["Fibra"]   = ("FIBER", "CLOTH"),
+        ["Madera"]  = ("WOOD",  "PLANKS"),
+        ["Cuero"]   = ("HIDE",  "LEATHER"),
+        ["Piedra"]  = ("ROCK",  "STONEBLOCK"),
+    };
+    private static readonly Dictionary<string, string> ResourceMatchCity = new()
+    {
+        ["Mineral"] = "Thetford",
+        ["Fibra"]   = "Bridgewatch",
+        ["Madera"]  = "Lymhurst",
+        ["Cuero"]   = "Martlock",
+        ["Piedra"]  = "Fort Sterling",
+    };
+
+    // ── Enchanting state ──────────────────────────────────────────────────────
+    private string? _enchantBaseId;
+
+    // ── Route state ───────────────────────────────────────────────────────────
+    private readonly List<(string Id, string Name, int Qty)> _routeItems = new();
 
     private static readonly Regex TieredItemRegex =
         new(@"^T(\d)_(.+?)(?:@(\d))?$", RegexOptions.Compiled);
@@ -51,25 +90,27 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Icon = IconHelper.CreateWindowIcon();
-        _apiService   = (System.Windows.Application.Current as App)?.AlbionApiService ?? new AlbionApiService();
+
+        _apiService   = (Application.Current as App)?.AlbionApiService ?? new AlbionApiService();
         _itemDatabase = new ItemDatabase();
 
         Loaded      += MainWindow_Loaded;
         Closed      += MainWindow_Closed;
         Deactivated += MainWindow_Deactivated;
+        Activated   += (_, _) => _hideTimer?.Stop();
 
-        SparklineCanvas.SizeChanged += (_, _) =>
+        SparklineCanvas.LayoutUpdated += (_, _) =>
         {
-            if (_sparklineData != null) DrawSparkline(_sparklineData);
+            var sz = SparklineCanvas.Bounds.Size;
+            if (_sparklineData == null || sz == _lastSparklineBounds) return;
+            _lastSparklineBounds = sz;
+            DrawSparkline(_sparklineData);
         };
 
-        _hideTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(500)
-        };
+        _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _hideTimer.Tick += HideTimer_Tick;
 
-        var rt = (System.Windows.Application.Current as App)?.RealtimeService;
+        var rt = (Application.Current as App)?.RealtimeService;
         if (rt != null)
         {
             rt.PriceUpdated      += OnRealtimePriceUpdated;
@@ -79,8 +120,12 @@ public partial class MainWindow : Window
         Loaded += async (s, e) =>
         {
             _regionButtons = [RegionNABtn, RegionEUBtn, RegionASBtn];
-            var savedRegion = (System.Windows.Application.Current as App)?.Settings.Region
-                              ?? AlbionPrices.Models.ServerRegion.Europe;
+            _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn];
+            _calcSubBtns   = [CraftSubBtn, RefineSubBtn, EnchantSubBtn, RouteSubBtn];
+            InitRefineSelectors();
+            InitRoutePanel();
+            var savedRegion = (Application.Current as App)?.Settings.Region
+                              ?? ServerRegion.Europe;
             RefreshRegionButtons(savedRegion);
 
             if (_dbLoaded) return;
@@ -96,37 +141,41 @@ public partial class MainWindow : Window
 
             try
             {
-                var updateService = (System.Windows.Application.Current as App)?.UpdateService;
+                var updateService = (Application.Current as App)?.UpdateService;
                 if (updateService != null)
                 {
                     await updateService.CheckForUpdateAsync();
                     if (updateService.IsUpdateAvailable)
                     {
-                        UpdateBanner.Text = $"Nueva version disponible: v{updateService.LatestVersion}";
-                        UpdateBanner.Visibility = Visibility.Visible;
+                        UpdateBanner.Text      = $"Nueva version disponible: v{updateService.LatestVersion}";
+                        UpdateBanner.IsVisible = true;
                     }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Update check error: {ex.Message}");
+                Debug.WriteLine($"Update check error: {ex.Message}");
             }
         };
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    private void MainWindow_Loaded(object? sender, RoutedEventArgs e)
     {
-        _hotkey = new GlobalHotkey(this, 9000);
+        _hotkey = new GlobalHotkey(9000);
         if (_hotkey.Register()) _hotkey.HotkeyPressed += OnHotkeyPressed;
     }
 
-    private void MainWindow_Closed(object? sender, EventArgs e) => _hotkey?.Dispose();
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _hotkey?.Dispose();
+        _watchTimer?.Stop();
+    }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
-        if (IsVisible && !_isLoading) _hideTimer?.Start();
+        if (IsVisible && !_isLoading && !_dialogOpen) _hideTimer?.Start();
     }
 
     private void HideTimer_Tick(object? sender, EventArgs e)
@@ -135,44 +184,90 @@ public partial class MainWindow : Window
         Hide();
     }
 
-    public void SetNotifyIcon(NotifyIcon notifyIcon) => _notifyIcon = notifyIcon;
-
     internal void ShowCentered()
     {
         if (IsVisible && IsLoaded) { Activate(); Focus(); return; }
-        Left = (SystemParameters.PrimaryScreenWidth  - Width)  / 2;
-        Top  = (SystemParameters.PrimaryScreenHeight - Height) / 2;
+        var screen = Screens.Primary;
+        if (screen != null)
+        {
+            var wa = screen.WorkingArea;
+            var s  = screen.Scaling;
+            Position = new PixelPoint(
+                wa.X + (int)((wa.Width  - ClientSize.Width  * s) / 2),
+                wa.Y + (int)((wa.Height - ClientSize.Height * s) / 2));
+        }
         Show(); Activate(); Focus();
     }
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
     {
         _hideTimer?.Stop();
-        ShowCentered();
+        Dispatcher.UIThread.InvokeAsync(ShowCentered);
     }
 
     // ── Mode toggle ──────────────────────────────────────────────────────────
 
-    private void PriceMode_Click(object sender, RoutedEventArgs e)
+    private void SetActiveMode(StackPanel active, Button activeBtn)
     {
-        PriceModeContent.Visibility  = Visibility.Visible;
-        PlayerModeContent.Visibility = Visibility.Collapsed;
-        PriceModeBtn.Background  = new SolidColorBrush(Color.FromRgb(255, 117, 80));
-        PriceModeBtn.Foreground  = Brushes.White;
-        PlayerModeBtn.Background = Brushes.Transparent;
-        PlayerModeBtn.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102));
-        (System.Windows.Application.Current as App)?.RealtimeService?.SetItem(_currentItemId);
+        PriceModeContent.IsVisible    = active == PriceModeContent;
+        CraftingModeContent.IsVisible = active == CraftingModeContent;
+        WatchModeContent.IsVisible    = active == WatchModeContent;
+        PlayerModeContent.IsVisible   = active == PlayerModeContent;
+
+        foreach (var btn in _modeBtns ?? [])
+        {
+            btn.Background = Brushes.Transparent;
+            btn.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+        }
+        activeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
+        activeBtn.Foreground = Brushes.White;
     }
 
-    private void PlayerMode_Click(object sender, RoutedEventArgs e)
+    private void SetActiveCalcSub(StackPanel active, Button activeBtn)
     {
-        PlayerModeContent.Visibility = Visibility.Visible;
-        PriceModeContent.Visibility  = Visibility.Collapsed;
-        PlayerModeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
-        PlayerModeBtn.Foreground = Brushes.White;
-        PriceModeBtn.Background  = Brushes.Transparent;
-        PriceModeBtn.Foreground  = new SolidColorBrush(Color.FromRgb(102, 102, 102));
-        (System.Windows.Application.Current as App)?.RealtimeService?.SetItem(null);
+        CraftSubPanel.IsVisible  = active == CraftSubPanel;
+        RefineSubPanel.IsVisible = active == RefineSubPanel;
+        EnchantSubPanel.IsVisible = active == EnchantSubPanel;
+        RouteSubPanel.IsVisible  = active == RouteSubPanel;
+        foreach (var btn in _calcSubBtns ?? [])
+        {
+            btn.Background = Brushes.Transparent;
+            btn.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+        }
+        activeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
+        activeBtn.Foreground = Brushes.White;
+        ForceResizeWindow();
+    }
+
+    private void CraftSubMode_Click(object?  sender, RoutedEventArgs e) => SetActiveCalcSub(CraftSubPanel,   CraftSubBtn);
+    private void RefineSubMode_Click(object? sender, RoutedEventArgs e) => SetActiveCalcSub(RefineSubPanel,  RefineSubBtn);
+    private void EnchantSubMode_Click(object? sender, RoutedEventArgs e) => SetActiveCalcSub(EnchantSubPanel, EnchantSubBtn);
+    private void RouteSubMode_Click(object?  sender, RoutedEventArgs e) => SetActiveCalcSub(RouteSubPanel,   RouteSubBtn);
+
+    private void PriceMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(PriceModeContent, PriceModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(_currentItemId);
+    }
+
+    private void CraftingMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(CraftingModeContent, CraftingModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+    }
+
+    private void WatchMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(WatchModeContent, WatchModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+        EnsureWatchTimerRunning();
+        RefreshWatchlistUI();
+    }
+
+    private void PlayerMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(PlayerModeContent, PlayerModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
         PlayerInput.Focus();
     }
 
@@ -183,8 +278,8 @@ public partial class MainWindow : Window
         var gold = await _apiService.GetGoldPriceAsync();
         if (gold != null)
         {
-            GoldPriceText.Text = $"{gold.Price:N0}";
-            GoldPriceRow.Visibility = Visibility.Visible;
+            GoldPriceText.Text      = $"{gold.Price:N0}";
+            GoldPriceRow.IsVisible  = true;
         }
     }
 
@@ -192,7 +287,7 @@ public partial class MainWindow : Window
 
     private void RefreshHistoryUI()
     {
-        var hist = (System.Windows.Application.Current as App)?.HistoryService;
+        var hist = (Application.Current as App)?.HistoryService;
         if (hist == null) return;
 
         RecentSearchChips.Children.Clear();
@@ -202,7 +297,7 @@ public partial class MainWindow : Window
             var chip = MakeChip(e.ItemName, async () => await CheckItemById(e.ItemId, e.ItemName));
             RecentSearchChips.Children.Add(chip);
         }
-        RecentSearchesSection.Visibility = hist.RecentItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RecentSearchesSection.IsVisible = hist.RecentItems.Count > 0;
 
         FavoriteChips.Children.Clear();
         foreach (var entry in hist.Favorites)
@@ -211,7 +306,7 @@ public partial class MainWindow : Window
             var chip = MakeChip($"★ {e.ItemName}", async () => await CheckItemById(e.ItemId, e.ItemName), starred: true);
             FavoriteChips.Children.Add(chip);
         }
-        FavoritesSection.Visibility = hist.Favorites.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FavoritesSection.IsVisible = hist.Favorites.Count > 0;
     }
 
     private static Button MakeChip(string label, Func<Task> onClick, bool starred = false)
@@ -222,6 +317,9 @@ public partial class MainWindow : Window
             FontSize        = 9,
             Height          = 20,
             Padding         = new Thickness(7, 0, 7, 0),
+            MinHeight       = 0,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
             Margin          = new Thickness(0, 0, 4, 4),
             Background      = new SolidColorBrush(Color.FromRgb(30, 30, 35)),
             Foreground      = starred
@@ -236,16 +334,16 @@ public partial class MainWindow : Window
         return btn;
     }
 
-    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    private void ClearHistory_Click(object? sender, RoutedEventArgs e)
     {
-        (System.Windows.Application.Current as App)?.HistoryService?.ClearHistory();
+        (Application.Current as App)?.HistoryService?.ClearHistory();
         RefreshHistoryUI();
     }
 
-    private void FavoriteBtn_Click(object sender, RoutedEventArgs e)
+    private void FavoriteBtn_Click(object? sender, RoutedEventArgs e)
     {
         if (_currentItemId == null || _currentItemName == null) return;
-        var hist = (System.Windows.Application.Current as App)?.HistoryService;
+        var hist = (Application.Current as App)?.HistoryService;
         if (hist == null) return;
         var isFav = hist.ToggleFavorite(_currentItemId, _currentItemName);
         FavoriteBtn.Content = isFav ? "★" : "☆";
@@ -257,7 +355,7 @@ public partial class MainWindow : Window
     private void OnRealtimePriceUpdated(object? sender, PriceApiResponse msg)
     {
         if (msg.City is null) return;
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Invoke(() =>
         {
             if (!_cityViewModels.TryGetValue(msg.City, out var vm)) return;
             if (msg.SellPriceMin > 0) { vm.BuyAt = msg.SellPriceMin.Value; vm.BuyAtDate = msg.SellPriceMinDate ?? DateTime.UtcNow; }
@@ -267,12 +365,12 @@ public partial class MainWindow : Window
 
     private void OnRealtimeConnectionChanged(object? sender, bool connected)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Invoke(() =>
         {
-            LiveDot.Fill    = connected
+            LiveDot.Fill = connected
                 ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
                 : new SolidColorBrush(Color.FromRgb(85, 85, 85));
-            LiveDot.ToolTip = connected ? "En vivo — datos en tiempo real" : "Sin conexión en tiempo real";
+            ToolTip.SetTip(LiveDot, connected ? "En vivo — datos en tiempo real" : "Sin conexión en tiempo real");
         });
     }
 
@@ -280,24 +378,20 @@ public partial class MainWindow : Window
 
     private void DisplayPriceInfo(ItemPriceSummary summary, bool setupTierEnchant = true)
     {
-        StatusText.Visibility = Visibility.Collapsed;
-        ItemInfoPanel.Visibility = Visibility.Visible;
+        StatusText.IsVisible    = false;
+        ItemInfoPanel.IsVisible = true;
+        ForceResizeWindow();
 
         ItemNameText.Text = summary.ItemName;
         ItemIdText.Text   = summary.ItemId;
         _currentItemId    = summary.ItemId;
         _currentItemName  = summary.ItemName;
 
-        // Favorite button state
-        var hist = (System.Windows.Application.Current as App)?.HistoryService;
+        var hist = (Application.Current as App)?.HistoryService;
         FavoriteBtn.Content = hist?.IsFavorite(summary.ItemId) == true ? "★" : "☆";
 
-        // Item icon
-        try
-        {
-            ItemIcon.Source = new BitmapImage(new Uri(GameInfoService.GetItemIconUrl(summary.ItemId)));
-        }
-        catch { ItemIcon.Source = null; }
+        ItemIcon.Source = null;
+        _ = LoadImageFromUrlAsync(ItemIcon, GameInfoService.GetItemIconUrl(summary.ItemId));
 
         if (setupTierEnchant)
         {
@@ -310,13 +404,21 @@ public partial class MainWindow : Window
         {
             BestBuyCityText.Text  = bestBuy.City;
             BestBuyPriceText.Text = $"{bestBuy.BuyAt:N0}";
+            _currentBestBuyPrice  = bestBuy.BuyAt;
         }
 
-        var bestSell = summary.BestSellCity;
+        var bestSell = summary.BestSellOrderCity;
         if (bestSell != null)
         {
             BestSellCityText.Text  = bestSell.City;
-            BestSellPriceText.Text = $"{bestSell.SellAt:N0}";
+            BestSellPriceText.Text = $"{bestSell.BuyAt:N0}";
+        }
+
+        var bestInstant = summary.BestInstantSellCity;
+        if (bestInstant != null)
+        {
+            BestInstantCityText.Text  = bestInstant.City;
+            BestInstantPriceText.Text = $"{bestInstant.SellAt:N0}";
         }
 
         var vms = summary.Prices.Select(p => new CityPriceViewModel
@@ -333,37 +435,36 @@ public partial class MainWindow : Window
         CitiesList.ItemsSource = vms;
 
         DisplayFlipCalculator(summary);
-
-        (System.Windows.Application.Current as App)?.RealtimeService?.SetItem(summary.ItemId);
+        (Application.Current as App)?.RealtimeService?.SetItem(summary.ItemId);
     }
 
     // ── Flip calculator ──────────────────────────────────────────────────────
 
     private void DisplayFlipCalculator(ItemPriceSummary summary)
     {
+        // Buy at cheapest sell order; sell by listing at or below highest sell order in another city
         var buyCity  = summary.BestBuyCity;
-        var sellCity = summary.BestSellCity;
+        var sellCity = summary.BestSellOrderCity;
 
-        if (buyCity == null || sellCity == null || buyCity.BuyAt <= 0 || sellCity.SellAt <= 0)
+        if (buyCity == null || sellCity == null || buyCity.BuyAt <= 0 || sellCity.BuyAt <= 0
+            || buyCity.City == sellCity.City)
         {
-            FlipCalcPanel.Visibility = Visibility.Collapsed;
+            FlipCalcPanel.IsVisible = false;
             return;
         }
 
-        var profit = sellCity.SellAt * 0.92 - buyCity.BuyAt;
+        var profit = sellCity.BuyAt * 0.92 - buyCity.BuyAt;
         if (profit <= 0 || profit / buyCity.BuyAt < 0.02)
         {
-            FlipCalcPanel.Visibility = Visibility.Collapsed;
+            FlipCalcPanel.IsVisible = false;
             return;
         }
 
         var margin = profit / buyCity.BuyAt * 100;
-        FlipRouteText.Text  = buyCity.City == sellCity.City
-            ? buyCity.City
-            : $"{buyCity.City}  →  {sellCity.City}";
+        FlipRouteText.Text  = $"{buyCity.City}  →  {sellCity.City}";
         FlipProfitText.Text = $"+{profit:N0}";
-        FlipMarginText.Text = $"Margen: {margin:F1}%  (comprás {buyCity.BuyAt:N0}, vendés {sellCity.SellAt:N0}, tax 8%)";
-        FlipCalcPanel.Visibility = Visibility.Visible;
+        FlipMarginText.Text = $"Margen: {margin:F1}%  (comprás {buyCity.BuyAt:N0}, vendés {sellCity.BuyAt:N0}, tax 8%)";
+        FlipCalcPanel.IsVisible = true;
     }
 
     // ── Price history sparkline ───────────────────────────────────────────────
@@ -373,30 +474,24 @@ public partial class MainWindow : Window
         var history = await _apiService.GetPriceHistoryAsync(itemId, quality, 24, ct);
         if (ct.IsCancellationRequested || history == null || history.Count == 0)
         {
-            Dispatcher.Invoke(() => { PriceHistoryPanel.Visibility = Visibility.Collapsed; _sparklineData = null; });
+            Dispatcher.UIThread.Invoke(() => { PriceHistoryPanel.IsVisible = false; _sparklineData = null; });
             return;
         }
 
-        // Pick the city with the most data points (most active market)
-        var best = history
-            .Where(h => h.Data?.Count > 3)
-            .OrderByDescending(h => h.Data!.Count)
-            .FirstOrDefault();
-
+        var best = history.Where(h => h.Data?.Count > 3).OrderByDescending(h => h.Data!.Count).FirstOrDefault();
         if (best?.Data == null)
         {
-            Dispatcher.Invoke(() => { PriceHistoryPanel.Visibility = Visibility.Collapsed; _sparklineData = null; });
+            Dispatcher.UIThread.Invoke(() => { PriceHistoryPanel.IsVisible = false; _sparklineData = null; });
             return;
         }
 
         var points = best.Data.OrderBy(p => p.Timestamp).TakeLast(14).ToList();
 
-        Dispatcher.Invoke(() =>
+        Dispatcher.UIThread.Invoke(() =>
         {
-            SparklineTitleText.Text = $"HISTORIAL 14 DÍAS — {best.City}";
-            _sparklineData = points;
-            PriceHistoryPanel.Visibility = Visibility.Visible;
-            PriceHistoryPanel.UpdateLayout();
+            SparklineTitleText.Text       = $"HISTORIAL 14 DÍAS — {best.City}";
+            _sparklineData                = points;
+            PriceHistoryPanel.IsVisible   = true;
             DrawSparkline(points);
         });
     }
@@ -406,8 +501,8 @@ public partial class MainWindow : Window
         SparklineCanvas.Children.Clear();
         if (points.Count < 2) return;
 
-        double w = SparklineCanvas.ActualWidth > 10 ? SparklineCanvas.ActualWidth : 370;
-        double h = SparklineCanvas.ActualHeight > 10 ? SparklineCanvas.ActualHeight : 50;
+        double w = SparklineCanvas.Bounds.Width  > 10 ? SparklineCanvas.Bounds.Width  : 370;
+        double h = SparklineCanvas.Bounds.Height > 10 ? SparklineCanvas.Bounds.Height : 50;
 
         var prices = points.Select(p => (double)p.AvgPrice).ToList();
         var min    = prices.Min();
@@ -415,9 +510,10 @@ public partial class MainWindow : Window
         var range  = max - min;
         if (range == 0) range = 1;
 
-        // Fill area under curve
-        var fillPoints = new PointCollection();
-        fillPoints.Add(new Point(2, h));
+        var fillPoints = new List<Point>
+        {
+            new(2, h),
+        };
         for (int i = 0; i < prices.Count; i++)
         {
             var x = 2 + i * (w - 4) / (prices.Count - 1);
@@ -434,22 +530,21 @@ public partial class MainWindow : Window
         };
         SparklineCanvas.Children.Add(fill);
 
-        // Line
-        var line = new Polyline
-        {
-            Stroke          = new SolidColorBrush(Color.FromRgb(255, 117, 80)),
-            StrokeThickness = 1.5,
-            Points          = new PointCollection(),
-        };
+        var linePoints = new List<Point>();
         for (int i = 0; i < prices.Count; i++)
         {
             var x = 2 + i * (w - 4) / (prices.Count - 1);
             var y = h - 4 - (prices[i] - min) / range * (h - 8);
-            line.Points.Add(new Point(x, y));
+            linePoints.Add(new Point(x, y));
         }
+        var line = new Polyline
+        {
+            Stroke          = new SolidColorBrush(Color.FromRgb(255, 117, 80)),
+            StrokeThickness = 1.5,
+            Points          = linePoints,
+        };
         SparklineCanvas.Children.Add(line);
 
-        // Min/max labels
         var minLabel = new TextBlock { Text = FormatFame((long)min), Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 100)), FontSize = 7 };
         Canvas.SetLeft(minLabel, 3);
         Canvas.SetBottom(minLabel, 1);
@@ -469,7 +564,7 @@ public partial class MainWindow : Window
     private void SetupTierEnchant(string uniqueName)
     {
         var m = TieredItemRegex.Match(uniqueName);
-        if (!m.Success) { TierEnchantPanel.Visibility = Visibility.Collapsed; return; }
+        if (!m.Success) { TierEnchantPanel.IsVisible = false; return; }
 
         _currentTier    = int.Parse(m.Groups[1].Value);
         _baseId         = m.Groups[2].Value;
@@ -487,11 +582,11 @@ public partial class MainWindow : Window
         }
         foreach (var k in _variants.Keys) _variants[k].Sort();
 
-        if (_variants.Count == 0) { TierEnchantPanel.Visibility = Visibility.Collapsed; return; }
+        if (_variants.Count == 0) { TierEnchantPanel.IsVisible = false; return; }
 
         RebuildTierButtons();
         RebuildEnchantButtons();
-        TierEnchantPanel.Visibility = Visibility.Visible;
+        TierEnchantPanel.IsVisible = true;
     }
 
     private void RebuildTierButtons()
@@ -538,19 +633,21 @@ public partial class MainWindow : Window
         _currentQuality = 1;
         if (IsConsumable(itemId) || !TieredItemRegex.IsMatch(itemId))
         {
-            QualityPanel.Visibility = Visibility.Collapsed;
+            QualityPanel.IsVisible = false;
             return;
         }
 
         QualityButtonsPanel.Children.Clear();
         for (var q = 1; q <= 5; q++)
         {
-            var quality = q;
+            var quality    = q;
             var isSelected = quality == 1;
             var btn = new Button
             {
                 Content = QualityLabels[q - 1],
-                Height = 22, Padding = new Thickness(6, 0, 6, 0),
+                Height = 22, Padding = new Thickness(6, 0), MinHeight = 0,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
                 Margin = new Thickness(2, 0, 2, 0), FontSize = 9, BorderThickness = new Thickness(1),
                 Background  = isSelected ? new SolidColorBrush(Color.FromRgb(255, 117, 80)) : new SolidColorBrush(Color.FromRgb(25, 25, 30)),
                 Foreground  = isSelected ? Brushes.White : new SolidColorBrush(Color.FromRgb(140, 140, 140)),
@@ -565,11 +662,10 @@ public partial class MainWindow : Window
             };
             QualityButtonsPanel.Children.Add(btn);
         }
-        QualityPanel.Visibility = Visibility.Visible;
+        QualityPanel.IsVisible = true;
     }
 
-    private static void PopulateButtons(WrapPanel panel, string[] labels, string selected,
-        Func<string, Task> onClick)
+    private static void PopulateButtons(WrapPanel panel, string[] labels, string selected, Func<string, Task> onClick)
     {
         panel.Children.Clear();
         foreach (var label in labels)
@@ -578,16 +674,13 @@ public partial class MainWindow : Window
             var btn = new Button
             {
                 Content = label, Width = 30, Height = 22,
+                Padding = new Thickness(2, 0), MinHeight = 0,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
                 Margin = new Thickness(2, 0, 2, 0), FontSize = 10, BorderThickness = new Thickness(1),
-                Background = isSelected
-                    ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
-                    : new SolidColorBrush(Color.FromRgb(25, 25, 30)),
-                Foreground = isSelected
-                    ? Brushes.White
-                    : new SolidColorBrush(Color.FromRgb(140, 140, 140)),
-                BorderBrush = isSelected
-                    ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
-                    : new SolidColorBrush(Color.FromRgb(60, 60, 65)),
+                Background  = isSelected ? new SolidColorBrush(Color.FromRgb(255, 117, 80)) : new SolidColorBrush(Color.FromRgb(25, 25, 30)),
+                Foreground  = isSelected ? Brushes.White : new SolidColorBrush(Color.FromRgb(140, 140, 140)),
+                BorderBrush = isSelected ? new SolidColorBrush(Color.FromRgb(255, 117, 80)) : new SolidColorBrush(Color.FromRgb(60, 60, 65)),
             };
             var capturedLabel = label;
             btn.Click += async (_, _) => await onClick(capturedLabel);
@@ -614,21 +707,21 @@ public partial class MainWindow : Window
         _isLoading = true;
         try
         {
-            StatusText.Text = "Actualizando...";
-            StatusText.Visibility = Visibility.Visible;
-            ErrorText.Visibility  = Visibility.Collapsed;
-            BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = "…";
+            StatusText.Text       = "Actualizando...";
+            StatusText.IsVisible  = true;
+            ErrorText.IsVisible   = false;
+            BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = BestInstantCityText.Text = BestInstantPriceText.Text = "…";
             CitiesList.ItemsSource = null;
 
-            var ct = _cts.Token;
+            var ct      = _cts.Token;
             var summary = await _apiService.GetItemPriceAsync(itemId, _currentQuality, ct);
-            StatusText.Visibility = Visibility.Collapsed;
+            StatusText.IsVisible = false;
 
             if (summary == null || summary.Prices.Count == 0)
             {
-                ErrorText.Text = $"Sin datos para: {itemId}";
-                ErrorText.Visibility = Visibility.Visible;
-                BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = "—";
+                ErrorText.Text      = $"Sin datos para: {itemId}";
+                ErrorText.IsVisible = true;
+                BestBuyCityText.Text = BestBuyPriceText.Text = BestSellCityText.Text = BestSellPriceText.Text = BestInstantCityText.Text = BestInstantPriceText.Text = "—";
                 return;
             }
 
@@ -639,21 +732,22 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            StatusText.Visibility = Visibility.Collapsed;
-            ErrorText.Text = $"Error: {ex.Message}";
-            ErrorText.Visibility = Visibility.Visible;
+            StatusText.IsVisible = false;
+            ErrorText.Text      = $"Error: {ex.Message}";
+            ErrorText.IsVisible = true;
         }
         finally { _isLoading = false; }
     }
 
     // ── Player mode ──────────────────────────────────────────────────────────
 
-    private async void PlayerSearchButton_Click(object sender, RoutedEventArgs e) =>
-        await SearchPlayerAsync(PlayerInput.Text);
+    private async void PlayerSearchButton_Click(object? sender, RoutedEventArgs e) =>
+        await SearchPlayerAsync(PlayerInput.Text ?? "");
 
-    private async void PlayerInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private async void PlayerInput_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter) await SearchPlayerAsync(PlayerInput.Text);
+        if (e.Key == Key.Return || e.Key == Key.Enter)
+            await SearchPlayerAsync(PlayerInput.Text ?? "");
     }
 
     private async Task SearchPlayerAsync(string name)
@@ -661,40 +755,37 @@ public partial class MainWindow : Window
         name = name.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        var svc = (System.Windows.Application.Current as App)?.GameInfoService;
+        var svc = (Application.Current as App)?.GameInfoService;
         if (svc == null) return;
 
         _playerCts?.Cancel();
         _playerCts = new CancellationTokenSource();
 
-        PlayerCard.Visibility        = Visibility.Collapsed;
-        PlayerResultsList.Visibility = Visibility.Collapsed;
-        PlayerErrorText.Visibility   = Visibility.Collapsed;
-        PlayerStatusText.Text        = "Buscando...";
-        PlayerStatusText.Visibility  = Visibility.Visible;
+        PlayerCard.IsVisible        = false;
+        PlayerResultsList.IsVisible = false;
+        PlayerErrorText.IsVisible   = false;
+        PlayerStatusText.Text       = "Buscando...";
+        PlayerStatusText.IsVisible  = true;
 
         try
         {
             var result = await svc.SearchAsync(name, _playerCts.Token, attempt =>
-                Dispatcher.Invoke(() => PlayerStatusText.Text = $"Reintentando... ({attempt}/2)"));
-            PlayerStatusText.Visibility = Visibility.Collapsed;
+                Dispatcher.UIThread.Invoke(() => PlayerStatusText.Text = $"Reintentando... ({attempt}/2)"));
+            PlayerStatusText.IsVisible = false;
 
             var players = result?.Players ?? [];
             if (players.Count == 0)
             {
-                PlayerErrorText.Text       = $"No se encontró: {name}";
-                PlayerErrorText.Visibility = Visibility.Visible;
+                PlayerErrorText.Text      = $"No se encontró: {name}";
+                PlayerErrorText.IsVisible = true;
                 return;
             }
 
-            var exact = players.FirstOrDefault(p =>
-                string.Equals(p.Name, name, StringComparison.Ordinal));
-
+            var exact = players.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.Ordinal));
             if (exact == null)
             {
-                var ci = players.Where(p =>
-                    string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
-                exact = ci.Count == 1 ? ci[0] : null;
+                var ci = players.Where(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                exact  = ci.Count == 1 ? ci[0] : null;
             }
 
             if (exact?.Id != null)
@@ -704,19 +795,19 @@ public partial class MainWindow : Window
             else
             {
                 PlayerResultsList.ItemsSource  = players.Take(8).ToList();
-                PlayerResultsList.Visibility   = Visibility.Visible;
+                PlayerResultsList.IsVisible    = true;
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            PlayerStatusText.Visibility = Visibility.Collapsed;
-            PlayerErrorText.Text        = $"Error: {ex.Message}";
-            PlayerErrorText.Visibility  = Visibility.Visible;
+            PlayerStatusText.IsVisible = false;
+            PlayerErrorText.Text       = $"Error: {ex.Message}";
+            PlayerErrorText.IsVisible  = true;
         }
     }
 
-    private async void PlayerResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void PlayerResultsList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (PlayerResultsList.SelectedItem is PlayerSearchEntry entry && entry.Id != null)
             await LoadPlayerDetailsAsync(entry.Id, entry.Name ?? "");
@@ -724,32 +815,28 @@ public partial class MainWindow : Window
 
     private async Task LoadPlayerDetailsAsync(string playerId, string playerName)
     {
-        var svc = (System.Windows.Application.Current as App)?.GameInfoService;
+        var svc = (Application.Current as App)?.GameInfoService;
         if (svc == null) return;
 
-        PlayerResultsList.Visibility = Visibility.Collapsed;
-        PlayerStatusText.Text        = "Cargando perfil...";
-        PlayerStatusText.Visibility  = Visibility.Visible;
+        PlayerResultsList.IsVisible = false;
+        PlayerStatusText.Text       = "Cargando perfil...";
+        PlayerStatusText.IsVisible  = true;
 
         try
         {
-            var ct = _playerCts?.Token ?? default;
-
-            // Phase 1 — basic profile (fast, hits cached server after first search)
+            var ct     = _playerCts?.Token ?? default;
             var player = await svc.GetPlayerAsync(playerId, ct);
-            PlayerStatusText.Visibility = Visibility.Collapsed;
+            PlayerStatusText.IsVisible = false;
 
             if (player == null)
             {
-                PlayerErrorText.Text       = "No se pudo cargar el perfil.";
-                PlayerErrorText.Visibility = Visibility.Visible;
+                PlayerErrorText.Text      = "No se pudo cargar el perfil.";
+                PlayerErrorText.IsVisible = true;
                 return;
             }
 
-            // Show the card immediately with what we have
             DisplayPlayerInfo(player, playerName, null, null);
 
-            // Phase 2 — kills + deaths in parallel (uses cached server, much faster)
             using var killsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             killsCts.CancelAfter(TimeSpan.FromSeconds(8));
 
@@ -757,16 +844,14 @@ public partial class MainWindow : Window
             var deathsTask = svc.GetPlayerDeathsAsync(playerId, killsCts.Token);
             await Task.WhenAll(killsTask, deathsTask);
 
-            var kills  = await killsTask;
-            var deaths = await deathsTask;
-            UpdateEquipmentAndDeaths(player, kills, deaths);
+            UpdateEquipmentAndDeaths(player, await killsTask, await deathsTask);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            PlayerStatusText.Visibility = Visibility.Collapsed;
-            PlayerErrorText.Text        = $"Error: {ex.Message}";
-            PlayerErrorText.Visibility  = Visibility.Visible;
+            PlayerStatusText.IsVisible = false;
+            PlayerErrorText.Text       = $"Error: {ex.Message}";
+            PlayerErrorText.IsVisible  = true;
         }
     }
 
@@ -782,8 +867,8 @@ public partial class MainWindow : Window
 
         var lastEvent = allEvents
             .Where(k => k.TimeStamp.HasValue &&
-                        (string.Equals(k.Killer?.Id, player.Id, StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(k.Victim?.Id,  player.Id, StringComparison.OrdinalIgnoreCase)))
+                (string.Equals(k.Killer?.Id, player.Id, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(k.Victim?.Id,  player.Id, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(k => k.TimeStamp)
             .FirstOrDefault();
 
@@ -795,7 +880,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            LastEquipPanel.Visibility = Visibility.Collapsed;
+            LastEquipPanel.IsVisible = false;
         }
 
         DisplayDeaths(deaths);
@@ -804,19 +889,18 @@ public partial class MainWindow : Window
     private void DisplayPlayerInfo(PlayerInfo player, string fallbackName,
                                    List<KillEvent>? kills, List<KillEvent>? deaths)
     {
-        PlayerCard.Visibility      = Visibility.Visible;
-        PlayerErrorText.Visibility = Visibility.Collapsed;
+        PlayerCard.IsVisible      = true;
+        PlayerErrorText.IsVisible = false;
 
         PlayerNameText.Text  = player.Name ?? fallbackName;
         PlayerGuildText.Text = string.IsNullOrEmpty(player.GuildName) ? "Sin guild" : player.GuildName;
 
-        PlayerAllianceText.Text = string.IsNullOrEmpty(player.AllianceTag)
+        PlayerAllianceText.Text    = string.IsNullOrEmpty(player.AllianceTag)
             ? "" : $"[{player.AllianceTag}] {player.AllianceName}";
-        PlayerAllianceText.Visibility = string.IsNullOrEmpty(player.AllianceTag)
-            ? Visibility.Collapsed : Visibility.Visible;
+        PlayerAllianceText.IsVisible = !string.IsNullOrEmpty(player.AllianceTag);
 
         PlayerIPText.Text        = player.AverageItemPower > 0 ? $"{player.AverageItemPower.Value:F0}" : "—";
-        PlayerKillCountText.Text = "...";  // updated in phase 2
+        PlayerKillCountText.Text = "...";
 
         PlayerKillFameText.Text  = FormatFame(player.KillFame);
         PlayerDeathFameText.Text = FormatFame(player.DeathFame);
@@ -827,25 +911,19 @@ public partial class MainWindow : Window
         PlayerCraftText.Text  = FormatFame(player.LifetimeStatistics?.Crafting?.Total ?? 0);
 
         PlayerAvatarImg.Source = null;
-        _ = LoadPlayerAvatarAsync(player.Name ?? fallbackName);
+        _ = LoadImageFromUrlAsync(PlayerAvatarImg, GameInfoService.GetPlayerAvatarUrl(player.Name ?? fallbackName));
 
-        // Equipment and deaths are updated in phase 2 (UpdateEquipmentAndDeaths)
         _setValueCts?.Cancel();
-        SetValueText.Visibility      = Visibility.Collapsed;
-        LastEquipPanel.Visibility    = Visibility.Collapsed;
-        RecentDeathsPanel.Visibility = Visibility.Collapsed;
+        SetValueText.IsVisible      = false;
+        LastEquipPanel.IsVisible    = false;
+        RecentDeathsPanel.IsVisible = false;
     }
 
-    // ── Equipment grid (matches in-game inventory screen) ────────────────────
-    //
-    //  row 0: [Bolso]   [Cabeza]   [Capa]
-    //  row 1: [MH]      [Armadura] [OH]
-    //  row 2: [Poción]  [Zapatos]  [Comida]
-    //  row 3:           [Montura]
+    // ── Equipment grid ────────────────────────────────────────────────────────
 
     private void DisplayEquipment(KillEquipment? equipment, DateTime? lastSeen)
     {
-        if (equipment == null) { LastEquipPanel.Visibility = Visibility.Collapsed; return; }
+        if (equipment == null) { LastEquipPanel.IsVisible = false; return; }
 
         var slots = new (EquipmentItem? item, int row, int col, string label)[]
         {
@@ -861,14 +939,14 @@ public partial class MainWindow : Window
             (equipment.Mount,    3, 1, "Montura"),
         };
 
-        if (slots.All(s => s.item?.Type == null)) { LastEquipPanel.Visibility = Visibility.Collapsed; return; }
+        if (slots.All(s => s.item?.Type == null)) { LastEquipPanel.IsVisible = false; return; }
 
-        LastEquipPanel.Visibility = Visibility.Visible;
-        LastSeenAgoText.Text = lastSeen.HasValue ? $"• {FormatAgo(lastSeen.Value)}" : "";
+        LastEquipPanel.IsVisible = true;
+        LastSeenAgoText.Text     = lastSeen.HasValue ? $"• {FormatAgo(lastSeen.Value)}" : "";
 
         EquipmentSlotsGrid.Children.Clear();
-        SetValueText.Text       = "Calculando valor...";
-        SetValueText.Visibility = Visibility.Visible;
+        SetValueText.Text      = "Calculando valor...";
+        SetValueText.IsVisible = true;
 
         foreach (var (item, row, col, label) in slots)
         {
@@ -885,23 +963,14 @@ public partial class MainWindow : Window
                 BorderBrush     = item?.Type != null
                     ? QualityBrush(item.Quality)
                     : new SolidColorBrush(Color.FromRgb(35, 35, 40)),
-                ToolTip = itemName != null ? $"{label}: {itemName}" : label,
             };
+            ToolTip.SetTip(border, itemName != null ? $"{label}: {itemName}" : label);
 
             if (item?.Type != null)
             {
-                try
-                {
-                    var img = new System.Windows.Controls.Image { Stretch = Stretch.Uniform, Margin = new Thickness(3) };
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource        = new Uri(GameInfoService.GetItemIconUrl(item.Type));
-                    bmp.DecodePixelWidth = 64;
-                    bmp.EndInit();
-                    img.Source   = bmp;
-                    border.Child = img;
-                }
-                catch { }
+                var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(3) };
+                border.Child = img;
+                _ = LoadImageFromUrlAsync(img, GameInfoService.GetItemIconUrl(item.Type));
             }
 
             Grid.SetRow(border, row);
@@ -930,7 +999,7 @@ public partial class MainWindow : Window
             (equipment.Food?.Type,     equipment.Food?.Quality     ?? 1),
         }.Where(x => !string.IsNullOrEmpty(x.Type)).ToList();
 
-        if (items.Count == 0) { Dispatcher.Invoke(() => SetValueText.Visibility = Visibility.Collapsed); return; }
+        if (items.Count == 0) { Dispatcher.UIThread.Invoke(() => SetValueText.IsVisible = false); return; }
 
         try
         {
@@ -938,55 +1007,46 @@ public partial class MainWindow : Window
             await Task.WhenAll(tasks);
             if (ct.IsCancellationRequested) return;
 
-            double total = 0;
-            int priced = 0;
+            double total  = 0;
+            int    priced = 0;
             for (var i = 0; i < tasks.Count; i++)
             {
                 var buyAt = (await tasks[i])?.BestBuyCity?.BuyAt ?? 0;
                 if (buyAt > 0) { total += buyAt; priced++; }
             }
 
-            Dispatcher.Invoke(() =>
+            Dispatcher.UIThread.Invoke(() =>
             {
                 if (total > 0)
                 {
-                    var suffix = priced < items.Count ? $" ({priced}/{items.Count} items)" : "";
-                    SetValueText.Text       = $"⚔ Valor estimado: {total:N0} plata{suffix}";
-                    SetValueText.Visibility = Visibility.Visible;
+                    var suffix         = priced < items.Count ? $" ({priced}/{items.Count} items)" : "";
+                    SetValueText.Text  = $"⚔ Valor estimado: {total:N0} plata{suffix}";
+                    SetValueText.IsVisible = true;
                 }
                 else
                 {
-                    SetValueText.Visibility = Visibility.Collapsed;
+                    SetValueText.IsVisible = false;
                 }
             });
         }
         catch (OperationCanceledException) { }
-        catch { Dispatcher.Invoke(() => SetValueText.Visibility = Visibility.Collapsed); }
+        catch { Dispatcher.UIThread.Invoke(() => SetValueText.IsVisible = false); }
     }
 
     private static readonly HttpClient _avatarClient = new()
     {
         Timeout = TimeSpan.FromSeconds(10),
-        DefaultRequestHeaders = { { "User-Agent", "AlbionPrices/1.0" } }
+        DefaultRequestHeaders = { { "User-Agent", "AlbionPrices/1.0" } },
     };
 
-    private async Task LoadPlayerAvatarAsync(string playerName)
+    private static async Task LoadImageFromUrlAsync(Image img, string url)
     {
         try
         {
-            var url   = GameInfoService.GetPlayerAvatarUrl(playerName);
             var bytes = await _avatarClient.GetByteArrayAsync(url);
-
-            using var ms = new System.IO.MemoryStream(bytes);
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption  = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = ms;
-            bmp.DecodePixelWidth = 120;
-            bmp.EndInit();
-            bmp.Freeze();
-
-            Dispatcher.Invoke(() => PlayerAvatarImg.Source = bmp);
+            using var ms  = new MemoryStream(bytes);
+            var bmp = new Bitmap(ms);
+            Dispatcher.UIThread.Invoke(() => img.Source = bmp);
         }
         catch { }
     }
@@ -997,7 +1057,7 @@ public partial class MainWindow : Window
         3 => new SolidColorBrush(Color.FromRgb(33,  150, 243)),
         4 => new SolidColorBrush(Color.FromRgb(156, 39,  176)),
         5 => new SolidColorBrush(Color.FromRgb(255, 215,  0)),
-        _ => new SolidColorBrush(Color.FromRgb(70,  70,   75)),
+        _ => new SolidColorBrush(Color.FromRgb(70,  70,  75)),
     };
 
     // ── Deaths ───────────────────────────────────────────────────────────────
@@ -1006,7 +1066,7 @@ public partial class MainWindow : Window
     {
         if (deaths == null || deaths.Count == 0)
         {
-            RecentDeathsPanel.Visibility = Visibility.Collapsed;
+            RecentDeathsPanel.IsVisible = false;
             return;
         }
 
@@ -1014,19 +1074,29 @@ public partial class MainWindow : Window
             .Where(d => d.TimeStamp.HasValue)
             .OrderByDescending(d => d.TimeStamp)
             .Take(5)
-            .Select(d => new
-            {
-                KillerName  = d.Killer?.Name  ?? "Desconocido",
-                KillerGuild = string.IsNullOrEmpty(d.Killer?.GuildName) ? "" : $"[{d.Killer.GuildName}]",
-                TimeAgo     = FormatAgo(d.TimeStamp!.Value.ToUniversalTime()),
-            })
+            .Select(d => new DeathItem(
+                d.Killer?.Name  ?? "Desconocido",
+                string.IsNullOrEmpty(d.Killer?.GuildName) ? "" : $"[{d.Killer.GuildName}]",
+                FormatAgo(d.TimeStamp!.Value.ToUniversalTime())))
             .ToList();
 
-        DeathsList.ItemsSource = items;
-        RecentDeathsPanel.Visibility = Visibility.Visible;
+        DeathsList.ItemsSource      = items;
+        RecentDeathsPanel.IsVisible = true;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private void ForceResizeWindow()
+    {
+        // Two nested Posts: the outer one fixes the current size (Manual), which lets
+        // the layout pass between the two posts process the IsVisible changes; the inner
+        // one re-enables Height so Avalonia re-measures with the new content.
+        Dispatcher.UIThread.Post(() =>
+        {
+            SizeToContent = SizeToContent.Manual;
+            Dispatcher.UIThread.Post(() => SizeToContent = SizeToContent.Height);
+        });
+    }
 
     private static string FormatAgo(DateTime utcDate)
     {
@@ -1050,49 +1120,39 @@ public partial class MainWindow : Window
 
     // ── Region selector ──────────────────────────────────────────────────────
 
-    private void RegionNA_Click(object sender, RoutedEventArgs e) => ApplyRegion(AlbionPrices.Models.ServerRegion.Americas);
-    private void RegionEU_Click(object sender, RoutedEventArgs e) => ApplyRegion(AlbionPrices.Models.ServerRegion.Europe);
-    private void RegionAS_Click(object sender, RoutedEventArgs e) => ApplyRegion(AlbionPrices.Models.ServerRegion.Asia);
+    private void RegionNA_Click(object? sender, RoutedEventArgs e) => ApplyRegion(ServerRegion.Americas);
+    private void RegionEU_Click(object? sender, RoutedEventArgs e) => ApplyRegion(ServerRegion.Europe);
+    private void RegionAS_Click(object? sender, RoutedEventArgs e) => ApplyRegion(ServerRegion.Asia);
 
-    private void ApplyRegion(AlbionPrices.Models.ServerRegion region)
+    private void ApplyRegion(ServerRegion region)
     {
-        (System.Windows.Application.Current as App)?.ChangeRegion(region);
+        (Application.Current as App)?.ChangeRegion(region);
         RefreshRegionButtons(region);
         _ = LoadGoldPriceAsync();
     }
 
-    private void RefreshRegionButtons(AlbionPrices.Models.ServerRegion active)
+    private void RefreshRegionButtons(ServerRegion active)
     {
         if (_regionButtons == null) return;
-        var regions = new[]
-        {
-            AlbionPrices.Models.ServerRegion.Americas,
-            AlbionPrices.Models.ServerRegion.Europe,
-            AlbionPrices.Models.ServerRegion.Asia,
-        };
+        var regions = new[] { ServerRegion.Americas, ServerRegion.Europe, ServerRegion.Asia };
         for (int i = 0; i < _regionButtons.Length; i++)
         {
             var isActive = regions[i] == active;
-            _regionButtons[i].Background  = isActive
-                ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
-                : Brushes.Transparent;
-            _regionButtons[i].Foreground  = isActive
-                ? Brushes.White
-                : new SolidColorBrush(Color.FromRgb(102, 102, 102));
-            _regionButtons[i].BorderBrush = isActive
-                ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
-                : new SolidColorBrush(Color.FromRgb(51, 51, 51));
+            _regionButtons[i].Background  = isActive ? new SolidColorBrush(Color.FromRgb(255, 117, 80)) : Brushes.Transparent;
+            _regionButtons[i].Foreground  = isActive ? Brushes.White : new SolidColorBrush(Color.FromRgb(102, 102, 102));
+            _regionButtons[i].BorderBrush = isActive ? new SolidColorBrush(Color.FromRgb(255, 117, 80)) : new SolidColorBrush(Color.FromRgb(51, 51, 51));
         }
     }
 
     // ── Item search & check ──────────────────────────────────────────────────
 
-    private async void CheckButton_Click(object sender, RoutedEventArgs e) =>
-        await CheckItem(ItemInput.Text);
+    private async void CheckButton_Click(object? sender, RoutedEventArgs e) =>
+        await CheckItem(ItemInput.Text ?? "");
 
-    private async void ItemInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private async void ItemInput_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter) await CheckItem(ItemInput.Text);
+        if (e.Key == Key.Return || e.Key == Key.Enter)
+            await CheckItem(ItemInput.Text ?? "");
     }
 
     private async Task CheckItemById(string itemId, string itemName)
@@ -1103,16 +1163,16 @@ public partial class MainWindow : Window
 
         try
         {
-            ItemInput.Text = itemName;
+            ItemInput.Text        = itemName;
             StatusText.Text       = "Buscando...";
-            StatusText.Visibility = Visibility.Visible;
-            ItemInfoPanel.Visibility = Visibility.Collapsed;
-            ErrorText.Visibility     = Visibility.Collapsed;
+            StatusText.IsVisible  = true;
+            ItemInfoPanel.IsVisible = false;
+            ErrorText.IsVisible     = false;
 
             _currentQuality = 1;
             var ct      = _cts.Token;
             var summary = await _apiService.GetItemPriceAsync(itemId, 1, ct);
-            StatusText.Visibility = Visibility.Collapsed;
+            StatusText.IsVisible = false;
 
             if (summary == null || summary.Prices.Count == 0)
             {
@@ -1126,11 +1186,7 @@ public partial class MainWindow : Window
             ShowCentered();
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            ShowError($"Error: {ex.Message}");
-            ShowCentered();
-        }
+        catch (Exception ex) { ShowError($"Error: {ex.Message}"); ShowCentered(); }
         finally { _isLoading = false; }
     }
 
@@ -1146,13 +1202,13 @@ public partial class MainWindow : Window
         try
         {
             StatusText.Text       = "Buscando...";
-            StatusText.Visibility = Visibility.Visible;
-            ItemInfoPanel.Visibility = Visibility.Collapsed;
-            ErrorText.Visibility     = Visibility.Collapsed;
+            StatusText.IsVisible  = true;
+            ItemInfoPanel.IsVisible = false;
+            ErrorText.IsVisible     = false;
 
-            DebugText.Foreground = Brushes.Yellow;
+            DebugText.Foreground = new SolidColorBrush(Colors.Yellow);
             DebugText.Text       = $"DB: {_itemDatabase.ItemCount} items | Buscando: '{text}'";
-            DebugText.Visibility = Visibility.Visible;
+            DebugText.IsVisible  = true;
 
             if (_itemDatabase.ItemCount == 0)
             {
@@ -1190,62 +1246,1167 @@ public partial class MainWindow : Window
 
             summary.ItemName = _itemDatabase.GetNameById(itemId) ?? itemId;
             DisplayPriceInfo(summary);
+            DebugText.IsVisible = false;
 
-            var hist = (System.Windows.Application.Current as App)?.HistoryService;
+            var hist = (Application.Current as App)?.HistoryService;
             hist?.AddToHistory(itemId, summary.ItemName);
             RefreshHistoryUI();
 
             _ = LoadPriceHistoryAsync(itemId, 1, ct);
-
             ShowCentered();
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            ShowError($"Error: {ex.Message}");
-            ShowCentered();
-        }
+        catch (Exception ex) { ShowError($"Error: {ex.Message}"); ShowCentered(); }
         finally { _isLoading = false; }
-    }
-
-    // ── OCR / shared helpers ─────────────────────────────────────────────────
-
-    private static string? ExtractItemName(string? ocrText)
-    {
-        if (string.IsNullOrWhiteSpace(ocrText)) return null;
-        foreach (var line in ocrText.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var clean = line.Trim();
-            if (clean.Length >= 4 && clean.Any(char.IsLetter)) return clean;
-        }
-        return null;
     }
 
     private void ShowError(string message)
     {
-        StatusText.Visibility    = Visibility.Collapsed;
-        ItemInfoPanel.Visibility = Visibility.Collapsed;
-        ErrorText.Text           = message;
-        ErrorText.Visibility     = Visibility.Visible;
+        StatusText.IsVisible    = false;
+        ItemInfoPanel.IsVisible = false;
+        DebugText.IsVisible     = false;
+        ErrorText.Text          = message;
+        ErrorText.IsVisible     = true;
+        ForceResizeWindow();
+    }
+
+    // ── Add to watchlist ─────────────────────────────────────────────────────
+
+    private void AddToWatchlist_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentItemId == null || _currentItemName == null) return;
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null) return;
+
+        ws.Add(_currentItemId, _currentItemName, _currentQuality, _currentBestBuyPrice);
+
+        SetActiveMode(WatchModeContent, WatchModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+        EnsureWatchTimerRunning();
+        RefreshWatchlistUI();
+    }
+
+    // ── Watchlist timer & refresh ─────────────────────────────────────────────
+
+    private void EnsureWatchTimerRunning()
+    {
+        if (_watchTimer != null) return;
+        _watchSecondsLeft = WatchIntervalSeconds;
+        _watchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _watchTimer.Tick += WatchTimer_Tick;
+        _watchTimer.Start();
+        _ = RefreshAllWatchPricesAsync();
+    }
+
+    private void WatchTimer_Tick(object? sender, EventArgs e)
+    {
+        _watchSecondsLeft--;
+        UpdateWatchCountdownLabel();
+        if (_watchSecondsLeft <= 0)
+        {
+            _watchSecondsLeft = WatchIntervalSeconds;
+            _ = RefreshAllWatchPricesAsync();
+        }
+    }
+
+    private void UpdateWatchCountdownLabel()
+    {
+        var min = _watchSecondsLeft / 60;
+        var sec = _watchSecondsLeft % 60;
+        WatchCountdownText.Text = $"actualiza en {min}:{sec:D2}";
+    }
+
+    private void WatchRefresh_Click(object? sender, RoutedEventArgs e)
+    {
+        _watchSecondsLeft = WatchIntervalSeconds;
+        UpdateWatchCountdownLabel();
+        _ = RefreshAllWatchPricesAsync();
+    }
+
+    private async Task RefreshAllWatchPricesAsync()
+    {
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null || ws.Items.Count == 0) return;
+
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            foreach (var item in ws.Items) item.IsLoading = true;
+            RefreshWatchlistUI();
+        });
+
+        var snapshot = ws.Items.ToList();
+        var tasks = snapshot.Select(async entry =>
+        {
+            try
+            {
+                var summary = await _apiService.GetItemPriceAsync(entry.ItemId, entry.Quality, CancellationToken.None);
+                if (summary != null)
+                    ws.UpdatePrices(entry.ItemId, entry.Quality,
+                        summary.BestBuyCity?.BuyAt        ?? 0,
+                        summary.BestSellOrderCity?.BuyAt  ?? 0,
+                        summary.BestBuyCity?.City         ?? "");
+            }
+            catch { }
+            finally { entry.IsLoading = false; }
+        });
+
+        await Task.WhenAll(tasks);
+
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            RefreshWatchlistUI();
+            CheckAndShowAlertBanner();
+        });
+    }
+
+    private void RefreshWatchlistUI()
+    {
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null) return;
+
+        WatchEmptyText.IsVisible = ws.Items.Count == 0;
+        WatchItemsPanel.Children.Clear();
+        foreach (var item in ws.Items)
+            WatchItemsPanel.Children.Add(BuildWatchRow(item));
+    }
+
+    private Border BuildWatchRow(WatchlistEntry item)
+    {
+        var isTriggered = item.AlertTriggered;
+        var hasAlert    = item.AlertBuyBelow.HasValue;
+
+        double pct      = 0;
+        var    pctLabel = "—";
+        if (item.BasePrice > 0 && item.LastBuyPrice > 0)
+        {
+            pct      = (item.LastBuyPrice - item.BasePrice) / item.BasePrice * 100;
+            pctLabel = pct >= 0 ? $"+{pct:F1}%" : $"{pct:F1}%";
+        }
+        var pctBrush = pct >= 0
+            ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+            : new SolidColorBrush(Color.FromRgb(255, 68, 68));
+
+        var border = new Border
+        {
+            Background      = new SolidColorBrush(isTriggered
+                ? Color.FromArgb(30, 255, 68, 68)
+                : Color.FromArgb(21, 255, 255, 255)),
+            BorderBrush     = new SolidColorBrush(isTriggered
+                ? Color.FromRgb(255, 68, 68)
+                : Color.FromArgb(25, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            CornerRadius    = new CornerRadius(4),
+            Padding         = new Thickness(8, 6),
+            Margin          = new Thickness(0, 0, 0, 4),
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        var nameText     = item.Quality > 1 ? $"{item.ItemName}  [{QualityLabels[item.Quality - 1]}]" : item.ItemName;
+        var priceSubtext = item.IsLoading
+            ? "Actualizando..."
+            : (item.LastBuyPrice > 0 ? $"{item.LastBuyPrice:N0} — {item.BestBuyCity}" : "Sin datos");
+
+        var leftPanel = new StackPanel();
+        leftPanel.Children.Add(new TextBlock { Text = nameText, Foreground = Brushes.White, FontSize = 11, FontWeight = FontWeight.SemiBold });
+        leftPanel.Children.Add(new TextBlock { Text = priceSubtext, Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)), FontSize = 9 });
+        if (hasAlert)
+            leftPanel.Children.Add(new TextBlock
+            {
+                Text       = $"Alerta <= {item.AlertBuyBelow:N0}",
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 215, 0)),
+                FontSize   = 8,
+            });
+        Grid.SetColumn(leftPanel, 0);
+        grid.Children.Add(leftPanel);
+
+        var pctBlock = new TextBlock
+        {
+            Text              = pctLabel,
+            Foreground        = pctBrush,
+            FontSize          = 11,
+            FontWeight        = FontWeight.Bold,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Margin            = new Thickness(8, 0),
+        };
+        Grid.SetColumn(pctBlock, 1);
+        grid.Children.Add(pctBlock);
+
+        var capturedItem = item;
+        var btnPanel = new StackPanel
+        {
+            Orientation       = Avalonia.Layout.Orientation.Vertical,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+        var alertBtn = new Button
+        {
+            Content    = hasAlert ? "●" : "○",
+            Width = 22, Height = 18,
+            Padding = new Thickness(0), MinHeight = 0,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
+            Background      = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = hasAlert
+                ? new SolidColorBrush(Color.FromRgb(255, 215, 0))
+                : new SolidColorBrush(Color.FromRgb(85, 85, 85)),
+            FontSize = 10,
+        };
+        ToolTip.SetTip(alertBtn, hasAlert
+            ? $"Alerta activa: <= {item.AlertBuyBelow:N0}. Click para quitar"
+            : "Activar alerta de precio");
+        alertBtn.Click += async (_, _) => await ShowAlertDialogAsync(capturedItem);
+        btnPanel.Children.Add(alertBtn);
+
+        var removeBtn = new Button
+        {
+            Content    = "x",
+            Width = 22, Height = 18,
+            Padding = new Thickness(0), MinHeight = 0,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
+            Background      = Brushes.Transparent,
+            Foreground      = new SolidColorBrush(Color.FromRgb(85, 85, 85)),
+            BorderThickness = new Thickness(0),
+            FontSize        = 9,
+        };
+        removeBtn.Click += (_, _) =>
+        {
+            (Application.Current as App)?.WatchlistService?.Remove(capturedItem.ItemId, capturedItem.Quality);
+            RefreshWatchlistUI();
+        };
+        btnPanel.Children.Add(removeBtn);
+
+        Grid.SetColumn(btnPanel, 2);
+        grid.Children.Add(btnPanel);
+
+        border.Child = grid;
+        return border;
+    }
+
+    private async Task ShowAlertDialogAsync(WatchlistEntry item)
+    {
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null) return;
+
+        if (item.AlertBuyBelow.HasValue)
+        {
+            ws.SetAlert(item.ItemId, item.Quality, null);
+            RefreshWatchlistUI();
+            return;
+        }
+
+        var dlg = new Window
+        {
+            Title                 = "Configurar alerta",
+            Width                 = 310,
+            SizeToContent         = SizeToContent.Height,
+            SystemDecorations     = SystemDecorations.BorderOnly,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background            = new SolidColorBrush(Color.FromRgb(20, 20, 24)),
+            CanResize             = false,
+        };
+
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock
+        {
+            Text         = $"Alertar cuando {item.ItemName} baje a precio <=:",
+            Foreground   = new SolidColorBrush(Color.FromRgb(170, 170, 170)),
+            FontSize     = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin       = new Thickness(0, 0, 0, 8),
+        });
+        var input = new TextBox
+        {
+            Background  = new SolidColorBrush(Color.FromRgb(26, 26, 26)),
+            Foreground  = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(68, 68, 68)),
+            FontSize    = 12,
+            Padding     = new Thickness(8, 4),
+            Text        = item.LastBuyPrice > 0 ? ((long)item.LastBuyPrice).ToString() : "",
+        };
+        stack.Children.Add(input);
+
+        var btnRow = new StackPanel
+        {
+            Orientation         = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin              = new Thickness(0, 10, 0, 0),
+        };
+        var okBtn = new Button
+        {
+            Content = "Activar", Padding = new Thickness(14, 4), Margin = new Thickness(0, 0, 6, 0),
+            Background = new SolidColorBrush(Color.FromRgb(255, 117, 80)),
+            Foreground = Brushes.White, BorderThickness = new Thickness(0),
+        };
+        var cancelBtn = new Button
+        {
+            Content = "Cancelar", Padding = new Thickness(10, 4),
+            Background = Brushes.Transparent,
+            Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)),
+            BorderThickness = new Thickness(0),
+        };
+        okBtn.Click += (_, _) =>
+        {
+            var raw = System.Text.RegularExpressions.Regex.Replace(input.Text ?? "", @"[^\d]", "");
+            if (double.TryParse(raw, out var threshold) && threshold > 0)
+            {
+                ws.SetAlert(item.ItemId, item.Quality, threshold);
+                Dispatcher.UIThread.Invoke(RefreshWatchlistUI);
+            }
+            dlg.Close();
+        };
+        cancelBtn.Click += (_, _) => dlg.Close();
+        btnRow.Children.Add(okBtn);
+        btnRow.Children.Add(cancelBtn);
+        stack.Children.Add(btnRow);
+        dlg.Content = stack;
+
+        _dialogOpen = true;
+        try   { await dlg.ShowDialog(this); }
+        finally { _dialogOpen = false; }
+    }
+
+    private void AlertBannerDismiss_Click(object? sender, RoutedEventArgs e)
+    {
+        AlertBanner.IsVisible = false;
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null) return;
+        foreach (var item in ws.Items)
+            item.AlertTriggered = false;
+        RefreshWatchlistUI();
+    }
+
+    private void CheckAndShowAlertBanner()
+    {
+        var ws = (Application.Current as App)?.WatchlistService;
+        if (ws == null) return;
+        var triggered = ws.Items.Where(i => i.AlertTriggered).ToList();
+        if (triggered.Count == 0) { AlertBanner.IsVisible = false; return; }
+        var wasVisible        = AlertBanner.IsVisible;
+        AlertBannerText.Text  = "Alerta: " + string.Join(", ", triggered.Select(i => $"{i.ItemName} <= {i.LastBuyPrice:N0}"));
+        AlertBanner.IsVisible = true;
+        if (!wasVisible) PlayAlertSound();
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = false)]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static extern bool MessageBeep(uint uType);
+
+    private static void PlayAlertSound()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                MessageBeep(0x00000030); // MB_ICONEXCLAMATION
+            else
+                Console.Beep(880, 300);
+        }
+        catch { }
+    }
+
+    // ── Crafting ──────────────────────────────────────────────────────────────
+
+    private async void CraftSearchTarget_Click(object? sender, RoutedEventArgs e) =>
+        await SearchCraftTargetAsync(CraftTargetInput.Text ?? "");
+
+    private async void CraftTargetInput_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Return || e.Key == Key.Enter)
+            await SearchCraftTargetAsync(CraftTargetInput.Text ?? "");
+    }
+
+    private async Task SearchCraftTargetAsync(string text)
+    {
+        text = text.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        CraftStatusText.Text       = "Buscando...";
+        CraftStatusText.IsVisible  = true;
+        CraftTargetPanel.IsVisible = false;
+
+        var itemId = _itemDatabase.FindIdByName(text);
+        if (string.IsNullOrEmpty(itemId))
+        {
+            var sugg = _itemDatabase.Search(text);
+            itemId = sugg.Count > 0 ? sugg[0] : null;
+        }
+
+        if (itemId == null)
+        {
+            CraftStatusText.Text = $"No encontrado: {text}";
+            return;
+        }
+
+        var summary = await _apiService.GetItemPriceAsync(itemId, 1, CancellationToken.None);
+        CraftStatusText.IsVisible = false;
+
+        _craftTargetId        = itemId;
+        _craftTargetName      = _itemDatabase.GetNameById(itemId) ?? itemId;
+        var bestSellOrder     = summary?.BestSellOrderCity;
+        _craftTargetSellPrice = bestSellOrder?.BuyAt ?? 0;
+
+        CraftTargetNameText.Text = _craftTargetName;
+        CraftTargetIdText.Text   = itemId;
+        CraftTargetSellText.Text = _craftTargetSellPrice > 0
+            ? $"{_craftTargetSellPrice:N0}  ({bestSellOrder?.City ?? ""})"
+            : "—";
+        CraftTargetIcon.Source   = null;
+        _ = LoadImageFromUrlAsync(CraftTargetIcon, GameInfoService.GetItemIconUrl(itemId));
+
+        CraftTargetPanel.IsVisible     = true;
+        CraftMaterialsHeader.IsVisible = true;
+        CraftAddMaterialRow.IsVisible  = false;
+        RebuildMaterialRows();
+        RefreshCraftSummary();
+    }
+
+    private void CraftAddMaterial_Click(object? sender, RoutedEventArgs e)
+    {
+        CraftAddMaterialRow.IsVisible = !CraftAddMaterialRow.IsVisible;
+        CraftMaterialNameInput.Text   = "";
+        CraftMaterialQtyInput.Text    = "1";
+        if (CraftAddMaterialRow.IsVisible) CraftMaterialNameInput.Focus();
+    }
+
+    private async void CraftMaterialInput_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Return || e.Key == Key.Enter)
+            await ConfirmAddMaterialAsync();
+        else if (e.Key == Key.Escape)
+            CraftAddMaterialRow.IsVisible = false;
+    }
+
+    private async void CraftConfirmMaterial_Click(object? sender, RoutedEventArgs e) =>
+        await ConfirmAddMaterialAsync();
+
+    private async Task ConfirmAddMaterialAsync()
+    {
+        var name = CraftMaterialNameInput.Text?.Trim() ?? "";
+        if (string.IsNullOrEmpty(name)) return;
+
+        if (!int.TryParse(CraftMaterialQtyInput.Text?.Trim(), out var qty) || qty < 1) qty = 1;
+
+        var itemId = _itemDatabase.FindIdByName(name);
+        if (string.IsNullOrEmpty(itemId))
+        {
+            var sugg = _itemDatabase.Search(name);
+            itemId = sugg.Count > 0 ? sugg[0] : null;
+        }
+
+        if (itemId == null)
+        {
+            CraftStatusText.Text      = $"Material no encontrado: {name}";
+            CraftStatusText.IsVisible = true;
+            return;
+        }
+
+        _craftMaterials.Add(new CraftMaterial
+        {
+            ItemId   = itemId,
+            ItemName = _itemDatabase.GetNameById(itemId) ?? itemId,
+            Quantity = qty,
+        });
+        CraftAddMaterialRow.IsVisible = false;
+        RebuildMaterialRows();
+        RefreshCraftSummary();
+        await FetchMaterialPricesAsync();
+    }
+
+    private void RebuildMaterialRows()
+    {
+        CraftMaterialsPanel.Children.Clear();
+        foreach (var mat in _craftMaterials)
+        {
+            var m = mat;
+            CraftMaterialsPanel.Children.Add(BuildMaterialRow(m));
+        }
+    }
+
+    private Border BuildMaterialRow(CraftMaterial mat)
+    {
+        var border = new Border
+        {
+            Background      = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)),
+            CornerRadius    = new CornerRadius(4),
+            Padding         = new Thickness(8, 5),
+            Margin          = new Thickness(0, 0, 0, 3),
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+        var sub = mat.UnitPrice > 0
+            ? $"x{mat.Quantity}  {mat.UnitPrice:N0} c/u  ({mat.UnitPrice * mat.Quantity:N0} total)  {mat.BestCity}"
+            : $"x{mat.Quantity}  cargando...";
+
+        var leftPanel = new StackPanel();
+        leftPanel.Children.Add(new TextBlock { Text = mat.ItemName, Foreground = Brushes.White, FontSize = 11 });
+        leftPanel.Children.Add(new TextBlock { Text = sub, Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)), FontSize = 9 });
+        Grid.SetColumn(leftPanel, 0);
+        grid.Children.Add(leftPanel);
+
+        var capturedMat = mat;
+        var removeBtn = new Button
+        {
+            Content    = "x",
+            Width = 22, Height = 22,
+            Padding = new Thickness(0), MinHeight = 0,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center,
+            Background      = Brushes.Transparent,
+            Foreground      = new SolidColorBrush(Color.FromRgb(85, 85, 85)),
+            BorderThickness = new Thickness(0),
+            FontSize        = 9,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        removeBtn.Click += (_, _) =>
+        {
+            _craftMaterials.Remove(capturedMat);
+            RebuildMaterialRows();
+            RefreshCraftSummary();
+        };
+        Grid.SetColumn(removeBtn, 1);
+        grid.Children.Add(removeBtn);
+
+        border.Child = grid;
+        return border;
+    }
+
+    private async Task FetchMaterialPricesAsync()
+    {
+        var tasks = _craftMaterials.ToList().Select(async mat =>
+        {
+            try
+            {
+                var summary = await _apiService.GetItemPriceAsync(mat.ItemId, 1, CancellationToken.None);
+                if (summary?.BestBuyCity != null)
+                {
+                    mat.UnitPrice = summary.BestBuyCity.BuyAt;
+                    mat.BestCity  = summary.BestBuyCity.City;
+                }
+            }
+            catch { }
+        });
+        await Task.WhenAll(tasks);
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            RebuildMaterialRows();
+            RefreshCraftSummary();
+        });
+    }
+
+    private void RefreshCraftSummary()
+    {
+        if (_craftMaterials.Count == 0 || _craftTargetSellPrice <= 0)
+        {
+            CraftSummaryPanel.IsVisible = false;
+            return;
+        }
+
+        var totalCost = _craftMaterials.Sum(m => m.UnitPrice * m.Quantity);
+        if (totalCost <= 0) { CraftSummaryPanel.IsVisible = false; return; }
+
+        var tax    = _craftTargetSellPrice * 0.08;
+        var profit = _craftTargetSellPrice - tax - totalCost;
+
+        CraftTotalCostText.Text = $"{totalCost:N0}";
+        CraftSellPriceText.Text = $"{_craftTargetSellPrice:N0}";
+        CraftTaxText.Text       = $"-{tax:N0}";
+        CraftProfitText.Text    = profit >= 0 ? $"+{profit:N0}" : $"{profit:N0}";
+        CraftProfitText.Foreground = profit >= 0
+            ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+            : new SolidColorBrush(Color.FromRgb(255, 68, 68));
+
+        CraftSummaryPanel.IsVisible = true;
     }
 
     // ── Shared UI handlers ───────────────────────────────────────────────────
 
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.ClickCount == 1) DragMove();
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
     }
 
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e) => Hide();
+    // ══════════════════════════════════════════════════════════════════════════
+    // REFINING CALCULATOR
+    // ══════════════════════════════════════════════════════════════════════════
 
-    private void UpdateBanner_Click(object sender, RoutedEventArgs e)
+    private static readonly string[] RefineCities =
+        ["Thetford", "Bridgewatch", "Lymhurst", "Martlock", "Fort Sterling", "Caerleon", "Brecilien"];
+
+    private void InitRefineSelectors()
     {
-        var svc = (System.Windows.Application.Current as App)?.UpdateService;
+        // Resource buttons
+        foreach (var res in ResourceIds.Keys)
+        {
+            var btn = MakeSmallToggleBtn(res, res == _refineResource, RefineResourceBtn_Click);
+            RefineResourcePanel.Children.Add(btn);
+        }
+        // Tier buttons
+        for (var t = 2; t <= 8; t++)
+        {
+            var tier = t;
+            var btn  = MakeSmallToggleBtn($"T{tier}", tier == _refineTier, (s, _) =>
+            {
+                _refineTier = tier;
+                HighlightToggleGroup(RefineResourcePanel, null); // just refresh
+                HighlightToggleGroup(RefineTierPanel, (Button)s!);
+            });
+            RefineTierPanel.Children.Add(btn);
+        }
+        // City buttons
+        foreach (var city in RefineCities)
+        {
+            var c   = city;
+            var btn = MakeSmallToggleBtn(c, c == _refineCity, (s, _) =>
+            {
+                _refineCity = c;
+                HighlightToggleGroup(RefineCityPanel, (Button)s!);
+            });
+            RefineCityPanel.Children.Add(btn);
+        }
+        HighlightToggleGroup(RefineTierPanel, (Button)RefineTierPanel.Children[_refineTier - 2]);
+        HighlightToggleGroup(RefineCityPanel, (Button)RefineCityPanel.Children[0]);
+    }
+
+    private void RefineResourceBtn_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn) return;
+        _refineResource = btn.Content?.ToString() ?? _refineResource;
+        // Auto-select matching city
+        if (ResourceMatchCity.TryGetValue(_refineResource, out var matchCity))
+        {
+            _refineCity = matchCity;
+            var idx = Array.IndexOf(RefineCities, matchCity);
+            if (idx >= 0) HighlightToggleGroup(RefineCityPanel, (Button)RefineCityPanel.Children[idx]);
+        }
+        HighlightToggleGroup(RefineResourcePanel, btn);
+    }
+
+    private void RefineFocus_Click(object? sender, RoutedEventArgs e)
+    {
+        _refineFocus = !_refineFocus;
+        RefineFocusBtn.Content    = _refineFocus ? "Sí" : "No";
+        RefineFocusBtn.Background = _refineFocus
+            ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
+            : Brushes.Transparent;
+        RefineFocusBtn.Foreground = _refineFocus ? Brushes.White
+            : new SolidColorBrush(Color.FromRgb(102, 102, 102));
+    }
+
+    private async void RefineCalc_Click(object? sender, RoutedEventArgs e) => await RefineCalculateAsync();
+
+    private async Task RefineCalculateAsync()
+    {
+        if (!ResourceIds.TryGetValue(_refineResource, out var ids)) return;
+        if (!int.TryParse(RefineQtyInput.Text?.Trim(), out var qty) || qty < 1) qty = 1;
+
+        RefineStatusText.Text      = "Consultando precios...";
+        RefineStatusText.IsVisible = true;
+        RefineResultPanel.IsVisible = false;
+
+        var rawId    = $"T{_refineTier}_{ids.Raw}";
+        var outId    = $"T{_refineTier}_{ids.Refined}";
+        var lowerId  = _refineTier > 2 ? $"T{_refineTier - 1}_{ids.Refined}" : null;
+
+        var (rawTask, outTask, lowerTask) = (
+            _apiService.GetItemPriceAsync(rawId),
+            _apiService.GetItemPriceAsync(outId),
+            lowerId != null ? _apiService.GetItemPriceAsync(lowerId) : Task.FromResult<ItemPriceSummary?>(null));
+
+        await Task.WhenAll(rawTask, outTask, lowerTask);
+
+        var rawSum   = rawTask.Result;
+        var outSum   = outTask.Result;
+        var lowerSum = lowerTask.Result;
+
+        if (rawSum == null || outSum == null)
+        {
+            RefineStatusText.Text = "Sin datos de precio. Verificá el recurso/tier.";
+            return;
+        }
+
+        double rawPrice   = rawSum.Prices.FirstOrDefault(p => p.City == _refineCity)?.BuyAt
+                            ?? rawSum.BestBuyCity?.BuyAt ?? 0;
+        double lowerPrice = lowerSum?.Prices.FirstOrDefault(p => p.City == _refineCity)?.BuyAt
+                            ?? lowerSum?.BestBuyCity?.BuyAt ?? 0;
+        double outPrice   = outSum.Prices.FirstOrDefault(p => p.City == _refineCity)?.BuyAt
+                            ?? outSum.BestSellOrderCity?.BuyAt ?? 0;
+
+        double returnRate = GetRefineReturnRate();
+        double costPerUnit = _refineTier == 2
+            ? 2 * rawPrice * (1 - returnRate)
+            : (2 * rawPrice + lowerPrice) * (1 - returnRate);
+
+        double totalCost = costPerUnit * qty;
+        double revenue   = outPrice * qty * 0.92;
+        double profit    = revenue - totalCost;
+
+        var matchCity = ResourceMatchCity.GetValueOrDefault(_refineResource, "");
+        RefineResultTitle.Text = $"REFINADO T{_refineTier} {_refineResource} — {qty} ud.  [{_refineCity}" +
+                                 (_refineCity == matchCity ? " ★" : "") + "]";
+
+        RefineRateText.Text      = $"{returnRate * 100:F1}%";
+        RefineRawCostText.Text   = rawPrice > 0 ? $"{rawPrice * 2 * qty * (1 - returnRate):N0}" : "—";
+        RefineLowerLabel.IsVisible  = _refineTier > 2;
+        RefineLowerCostText.IsVisible = _refineTier > 2;
+        RefineLowerCostText.Text = lowerPrice > 0 ? $"{lowerPrice * qty * (1 - returnRate):N0}" : "—";
+        RefineTotalCostText.Text = totalCost > 0  ? $"{totalCost:N0}" : "—";
+        RefineRevText.Text       = outPrice > 0   ? $"{revenue:N0}"  : "—";
+
+        RefineProfitText.Text       = profit != 0 ? $"{(profit >= 0 ? "+" : "")}{profit:N0}" : "—";
+        RefineProfitText.Foreground = profit >= 0
+            ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+            : new SolidColorBrush(Color.FromRgb(255, 68, 68));
+
+        RefineStatusText.IsVisible  = false;
+        RefineResultPanel.IsVisible = true;
+        ForceResizeWindow();
+    }
+
+    private double GetRefineReturnRate()
+    {
+        var matchCity = ResourceMatchCity.GetValueOrDefault(_refineResource, "");
+        if (_refineCity == matchCity)
+            return _refineFocus ? 0.539 : 0.367;
+        if (_refineCity is "Caerleon" or "Brecilien")
+            return _refineFocus ? 0.479 : 0.302;
+        return _refineFocus ? 0.479 : 0.152;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ENCHANTING CALCULATOR
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private static readonly string[] EnchantMaterialIds =
+        ["T{0}_RUNE", "T{0}_SOUL", "T{0}_RELIC"];
+
+    private void EnchantItemInput_KeyDown(object? sender, KeyEventArgs e)
+    { if (e.Key == Key.Return) _ = EnchantSearchAsync(); }
+
+    private void EnchantSearch_Click(object? sender, RoutedEventArgs e) => _ = EnchantSearchAsync();
+
+    private async Task EnchantSearchAsync()
+    {
+        var input = EnchantItemInput.Text?.Trim();
+        if (string.IsNullOrEmpty(input)) return;
+
+        EnchantStatusText.Text      = "Buscando...";
+        EnchantStatusText.IsVisible = true;
+        EnchantResultPanel.Children.Clear();
+
+        var matches = _itemDatabase.Search(input);
+        if (matches.Count == 0)
+        {
+            EnchantStatusText.Text = "Item no encontrado.";
+            return;
+        }
+
+        // Pick first match with a tiered ID (T4-T8) and no enchant suffix
+        var itemId = matches.FirstOrDefault(m =>
+        {
+            var m2 = TieredItemRegex.Match(m);
+            return m2.Success && !m.Contains('@');
+        }) ?? matches[0];
+
+        var match = TieredItemRegex.Match(itemId);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var tier) || tier < 2)
+        {
+            EnchantStatusText.Text = "Item no enchantable (tier < 2).";
+            return;
+        }
+
+        _enchantBaseId = itemId;
+        EnchantStatusText.Text = "Consultando precios...";
+
+        // Fetch base + @1 @2 @3 prices AND enchant materials in parallel
+        var priceTasks = new[]
+        {
+            _apiService.GetItemPriceAsync($"{itemId}"),
+            _apiService.GetItemPriceAsync($"{itemId}@1"),
+            _apiService.GetItemPriceAsync($"{itemId}@2"),
+            _apiService.GetItemPriceAsync($"{itemId}@3"),
+        };
+        var matTasks = new[]
+        {
+            _apiService.GetItemPriceAsync($"T{tier}_RUNE"),
+            _apiService.GetItemPriceAsync($"T{tier}_SOUL"),
+            _apiService.GetItemPriceAsync($"T{tier}_RELIC"),
+        };
+        await Task.WhenAll(priceTasks.Concat(matTasks));
+
+        var prices  = priceTasks.Select(t => t.Result?.BestSellOrderCity?.BuyAt ?? 0).ToArray();
+        var matPrices = matTasks.Select(t => t.Result?.BestBuyCity?.BuyAt ?? 0).ToArray();
+        var matCities = matTasks.Select(t => t.Result?.BestBuyCity?.City ?? "").ToArray();
+
+        EnchantStatusText.IsVisible = false;
+        EnchantResultPanel.Children.Clear();
+
+        var itemName = _itemDatabase.GetNameById(itemId) ?? itemId;
+        var suffixes = new[] { ".0", ".1", ".2", ".3" };
+        var matNames = new[] { "Runa", "Alma", "Reliquia" };
+
+        // Header
+        var hdr = new TextBlock
+        {
+            Text = $"{itemName}  T{tier}",
+            Foreground = Brushes.White, FontSize = 11, FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        EnchantResultPanel.Children.Add(hdr);
+
+        for (var level = 0; level <= 3; level++)
+        {
+            var price = prices[level];
+
+            // Cost to reach this level from .0
+            double matCostFromBase = 0;
+            for (var m = 0; m < level; m++) matCostFromBase += matPrices[m];
+
+            double profitFromBase = level == 0 ? 0 : price * 0.92 - prices[0] - matCostFromBase;
+
+            var bg = level == 0
+                ? Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)
+                : profitFromBase > 0
+                    ? Color.FromArgb(0x1A, 0x4C, 0xAF, 0x50)
+                    : Color.FromArgb(0x15, 0xFF, 0x44, 0x44);
+
+            var row = new Border
+            {
+                Background = new SolidColorBrush(bg),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 5),
+                Margin = new Thickness(0, 0, 0, 3),
+            };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var lvlBlock = new TextBlock
+            {
+                Text = suffixes[level], Foreground = Brushes.White, FontSize = 11,
+                FontWeight = FontWeight.SemiBold, Width = 26
+            };
+            lvlBlock.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            Grid.SetColumn(lvlBlock, 0);
+
+            string midText;
+            if (level == 0)
+                midText = "";
+            else
+            {
+                var matPrice = matPrices[level - 1];
+                midText = matPrice > 0
+                    ? $"{matNames[level - 1]} {matCities[level - 1]}: {matPrice:N0}"
+                    : $"{matNames[level - 1]}: sin datos";
+            }
+            var midBlock = new TextBlock
+            {
+                Text = midText, Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                FontSize = 9, Margin = new Thickness(4, 0)
+            };
+            midBlock.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            Grid.SetColumn(midBlock, 1);
+
+            var rightStack = new StackPanel();
+            rightStack.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            var priceBlock = new TextBlock
+            {
+                Text = price > 0 ? $"{price:N0}" : "—",
+                Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                FontSize = 11, FontWeight = FontWeight.Bold
+            };
+            rightStack.Children.Add(priceBlock);
+            if (level > 0)
+            {
+                var profitBlock = new TextBlock
+                {
+                    Text = profitFromBase != 0
+                        ? $"{(profitFromBase >= 0 ? "+" : "")}{profitFromBase:N0}"
+                        : "—",
+                    Foreground = profitFromBase >= 0
+                        ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+                        : new SolidColorBrush(Color.FromRgb(255, 68, 68)),
+                    FontSize = 9
+                };
+                rightStack.Children.Add(profitBlock);
+            }
+            Grid.SetColumn(rightStack, 2);
+
+            grid.Children.Add(lvlBlock);
+            grid.Children.Add(midBlock);
+            grid.Children.Add(rightStack);
+            row.Child = grid;
+            EnchantResultPanel.Children.Add(row);
+        }
+        ForceResizeWindow();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ROUTE CALCULATOR
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void InitRoutePanel()
+    {
+        RouteCalcRow.IsVisible = false;
+        RouteStatusText.IsVisible = false;
+    }
+
+    private void RouteAddItem_Click(object? sender, RoutedEventArgs e)
+    {
+        var name = RouteItemInput.Text?.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+        if (!int.TryParse(RouteQtyInput.Text?.Trim(), out var qty) || qty < 1) qty = 1;
+
+        var matches = _itemDatabase.Search(name);
+        if (matches.Count == 0) return;
+
+        var item = matches[0];
+        var displayName = _itemDatabase.GetNameById(item) ?? item;
+
+        _routeItems.Add((item, displayName, qty));
+        RouteItemInput.Text  = "";
+        RouteQtyInput.Text   = "1";
+        RouteResultPanel.Children.Clear();
+        RebuildRouteItemsUI();
+        ForceResizeWindow();
+    }
+
+    private void RebuildRouteItemsUI()
+    {
+        RouteItemsPanel.Children.Clear();
+        for (var i = 0; i < _routeItems.Count; i++)
+        {
+            var idx  = i;
+            var item = _routeItems[i];
+            var row  = new Grid { Margin = new Thickness(0, 0, 0, 3) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var nameBlock = new TextBlock
+            {
+                Text = $"×{item.Qty}  {item.Name}", Foreground = Brushes.White,
+                FontSize = 10
+            };
+            nameBlock.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            Grid.SetColumn(nameBlock, 0);
+
+            var removeBtn = new Button
+            {
+                Content = "×", Width = 22, Height = 22, Padding = new Thickness(0),
+                MinHeight = 0, Margin = new Thickness(4, 0, 0, 0),
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)), FontSize = 12
+            };
+            removeBtn.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+            removeBtn.VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center;
+            removeBtn.Click += (_, _) =>
+            {
+                _routeItems.RemoveAt(idx);
+                RouteResultPanel.Children.Clear();
+                RebuildRouteItemsUI();
+                ForceResizeWindow();
+            };
+            Grid.SetColumn(removeBtn, 2);
+
+            row.Children.Add(nameBlock);
+            row.Children.Add(removeBtn);
+            RouteItemsPanel.Children.Add(row);
+        }
+
+        RouteCalcRow.IsVisible = _routeItems.Count > 0;
+        RouteItemCountText.Text = $"{_routeItems.Count} item(s)";
+    }
+
+    private async void RouteCalc_Click(object? sender, RoutedEventArgs e) => await RouteCalculateAsync();
+
+    private async Task RouteCalculateAsync()
+    {
+        if (_routeItems.Count == 0) return;
+
+        RouteStatusText.Text      = "Consultando precios...";
+        RouteStatusText.IsVisible = true;
+        RouteResultPanel.Children.Clear();
+
+        var tasks = _routeItems
+            .Select(it => _apiService.GetItemPriceAsync(it.Id))
+            .ToList();
+        await Task.WhenAll(tasks);
+
+        var summaries = tasks.Select(t => t.Result).ToList();
+
+        // Collect all known cities
+        var cities = summaries
+            .Where(s => s != null)
+            .SelectMany(s => s!.Prices.Select(p => p.City))
+            .Distinct()
+            .OrderBy(c => c)
+            .ToList();
+
+        // For each city, compute total revenue
+        var cityTotals = cities.Select(city =>
+        {
+            double total = 0;
+            var breakdown = new List<(string Name, double Value)>();
+            for (var i = 0; i < _routeItems.Count; i++)
+            {
+                var s = summaries[i];
+                var price = s?.Prices.FirstOrDefault(p => p.City == city)?.BuyAt ?? 0;
+                var value = price * _routeItems[i].Qty * 0.92;
+                total += value;
+                breakdown.Add((_routeItems[i].Name, value));
+            }
+            return (City: city, Total: total, Breakdown: breakdown);
+        })
+        .Where(c => c.Total > 0)
+        .OrderByDescending(c => c.Total)
+        .ToList();
+
+        RouteStatusText.IsVisible = false;
+
+        if (cityTotals.Count == 0)
+        {
+            RouteStatusText.Text      = "Sin datos de precio para los items.";
+            RouteStatusText.IsVisible = true;
+            return;
+        }
+
+        var best = cityTotals[0].Total;
+        foreach (var (city, total, breakdown) in cityTotals.Take(5))
+        {
+            var pct = best > 0 ? total / best * 100 : 0;
+            var isFirst = city == cityTotals[0].City;
+
+            var cityBorder = new Border
+            {
+                Background    = isFirst
+                    ? new SolidColorBrush(Color.FromArgb(0x28, 0x4C, 0xAF, 0x50))
+                    : new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)),
+                CornerRadius  = new CornerRadius(4),
+                Padding       = new Thickness(8, 6),
+                Margin        = new Thickness(0, 0, 0, 4),
+            };
+            var sp = new StackPanel();
+
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var cityBlock = new TextBlock
+            {
+                Text = city + (isFirst ? "  ★" : ""),
+                Foreground = isFirst
+                    ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+                    : Brushes.White,
+                FontSize = 11, FontWeight = FontWeight.SemiBold
+            };
+            Grid.SetColumn(cityBlock, 0);
+
+            var totalBlock = new TextBlock
+            {
+                Text = $"{total:N0}",
+                Foreground = isFirst
+                    ? new SolidColorBrush(Color.FromRgb(76, 175, 80))
+                    : Brushes.White,
+                FontSize = 11, FontWeight = FontWeight.Bold
+            };
+            Grid.SetColumn(totalBlock, 1);
+
+            header.Children.Add(cityBlock);
+            header.Children.Add(totalBlock);
+            sp.Children.Add(header);
+
+            if (!isFirst)
+            {
+                var diff = new TextBlock
+                {
+                    Text = $"-{best - total:N0} vs mejor",
+                    Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                    FontSize = 8, Margin = new Thickness(0, 1, 0, 0)
+                };
+                sp.Children.Add(diff);
+            }
+
+            // Per-item breakdown (only for best city or if > 1 item)
+            if (isFirst && _routeItems.Count > 1)
+            {
+                foreach (var (name, value) in breakdown.Where(b => b.Value > 0))
+                {
+                    var lineBlock = new TextBlock
+                    {
+                        Text = $"  {name}: {value:N0}",
+                        Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                        FontSize = 9
+                    };
+                    sp.Children.Add(lineBlock);
+                }
+            }
+
+            cityBorder.Child = sp;
+            RouteResultPanel.Children.Add(cityBorder);
+        }
+        ForceResizeWindow();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SHARED HELPER — small toggle button
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private static Button MakeSmallToggleBtn(string label, bool active, EventHandler<RoutedEventArgs> handler)
+    {
+        var btn = new Button
+        {
+            Content = label,
+            Height = 22, Padding = new Thickness(8, 0), MinHeight = 0,
+            BorderThickness = new Thickness(1),
+            FontSize = 9, Margin = new Thickness(0, 0, 3, 3),
+        };
+        btn.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        btn.VerticalContentAlignment   = Avalonia.Layout.VerticalAlignment.Center;
+        SetToggleBtnStyle(btn, active);
+        btn.Click += handler;
+        return btn;
+    }
+
+    private static void SetToggleBtnStyle(Button btn, bool active)
+    {
+        btn.Background   = active
+            ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
+            : Brushes.Transparent;
+        btn.Foreground   = active ? Brushes.White
+            : new SolidColorBrush(Color.FromRgb(102, 102, 102));
+        btn.BorderBrush  = active
+            ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
+            : new SolidColorBrush(Color.FromRgb(51, 51, 51));
+    }
+
+    private static void HighlightToggleGroup(WrapPanel panel, Button? active)
+    {
+        foreach (var child in panel.Children.OfType<Button>())
+            SetToggleBtnStyle(child, child == active);
+    }
+
+    private void MinimizeButton_Click(object? sender, RoutedEventArgs e) => Hide();
+
+    private void UpdateBanner_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
+        var svc = (Application.Current as App)?.UpdateService;
         if (svc?.IsUpdateAvailable != true) return;
-
         var url = svc.DownloadUrl ?? svc.ReleasePageUrl
-            ?? $"https://github.com/EstebanLemes/AlbionPricesOverlay/releases/latest";
-
+            ?? "https://github.com/EstebanLemes/AlbionPricesOverlay/releases/latest";
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 }
+
+// Named record to replace anonymous type in DeathsList binding
+public record DeathItem(string KillerName, string KillerGuild, string TimeAgo);
