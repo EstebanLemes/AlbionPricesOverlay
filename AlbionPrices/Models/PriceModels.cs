@@ -178,29 +178,59 @@ public class FlipOpportunity
     public string ItemName  { get; set; } = "";
     public string TierLabel { get; set; } = "";
     public int    Quality   { get; set; } = 1;
+
     public string BuyCity   { get; set; } = "";
     public double BuyPrice  { get; set; }
-    public string SellCity  { get; set; } = "";
-    public double SellPrice { get; set; }
-    public double Profit    { get; set; }
-    public double ProfitPct { get; set; }
+    public int    BuyVolume { get; set; }
 
-    public int    BuyVolume      { get; set; }
-    public int    SellVolume     { get; set; }
+    // Venta directa (instant sell via orden de compra en destino)
+    public string InstantSellCity     { get; set; } = "";
+    public double InstantSellPrice    { get; set; }   // BuyPriceMax en destino
+    public double InstantSellOrderRef { get; set; }   // SellPriceMin en ese mismo destino
+    public int    InstantSellVolume   { get; set; }
+    public double InstantProfit       { get; set; }
+    public double InstantProfitPct    { get; set; }
+
+    // Orden de venta (colocar sell order en destino)
+    public string OrderSellCity      { get; set; } = "";
+    public double OrderSellPrice     { get; set; }    // SellPriceMin en destino
+    public double OrderSellInstantRef{ get; set; }    // BuyPriceMax en ese mismo destino
+    public int    OrderSellVolume    { get; set; }
+    public double OrderProfit        { get; set; }
+    public double OrderProfitPct     { get; set; }
+
+    public bool HasInstantSell => InstantSellPrice > 0 && InstantProfit > 0;
+    public bool HasOrderSell   => OrderSellPrice   > 0 && OrderProfit   > 0;
+
+    // Mejor ganancia de las dos opciones (para ordenar y filtrar)
+    public double Profit => Math.Max(HasInstantSell ? InstantProfit : 0,
+                                     HasOrderSell   ? OrderProfit   : 0);
+
+    // Para journal: la opción con mayor ganancia
+    public string SellCity  => InstantProfit >= OrderProfit ? InstantSellCity  : OrderSellCity;
+    public double SellPrice => InstantProfit >= OrderProfit ? InstantSellPrice : OrderSellPrice;
 
     public string QualityLabel => Quality switch
     {
-        2 => "Buena",
-        3 => "Dest.",
-        4 => "Exc.",
-        5 => "Obra",
-        _ => "Nor.",
+        2 => "Buena", 3 => "Dest.", 4 => "Exc.", 5 => "Obra", _ => "Nor.",
     };
 
     public string BuyPriceLabel  => $"{BuyPrice:N0}s";
-    public string SellPriceLabel => $"{SellPrice:N0}s";
-    public string ProfitLabel    => $"+{Profit:N0}s";
-    public string ProfitPctLabel => $"+{ProfitPct:F1}%";
-    public string BuyVolumeLabel  => BuyVolume  > 0 ? $"×{BuyVolume}"  : "";
-    public string SellVolumeLabel => SellVolume > 0 ? $"×{SellVolume}" : "";
+    public string BuyVolumeLabel => BuyVolume > 0 ? $"×{BuyVolume}" : "";
+
+    public string InstantSellPriceLabel  => $"{InstantSellPrice:N0}s";
+    public string InstantSellVolumeLabel => InstantSellVolume > 0 ? $"×{InstantSellVolume}" : "";
+    public string InstantSellOrderRefLabel => InstantSellOrderRef > 0 ? $"ord. {InstantSellOrderRef:N0}s" : "";
+    public bool   HasInstantSellOrderRef   => InstantSellOrderRef > 0;
+    public string InstantProfitLabel     => $"+{InstantProfit:N0}s";
+    public string InstantProfitPctLabel  => $"+{InstantProfitPct:F1}%";
+
+    public string OrderSellPriceLabel    => $"{OrderSellPrice:N0}s";
+    public string OrderSellVolumeLabel   => OrderSellVolume > 0 ? $"×{OrderSellVolume}" : "";
+    public string OrderSellInstantRefLabel => OrderSellInstantRef > 0 ? $"dir. {OrderSellInstantRef:N0}s" : "";
+    public bool   HasOrderSellInstantRef   => OrderSellInstantRef > 0;
+    public string OrderProfitLabel       => $"+{OrderProfit:N0}s";
+    public string OrderProfitPctLabel    => $"+{OrderProfitPct:F1}%";
+
+    public string ProfitLabel => $"+{Profit:N0}s";
 }

@@ -174,12 +174,51 @@
                         </StackPanel>
 
                         <!-- Quality selector -->
-                        <StackPanel x:Name="QualityPanel" IsVisible="False" Margin="0,0,0,10">
+                        <StackPanel x:Name="QualityPanel" IsVisible="False" Margin="0,0,0,6">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Estado" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
                                 <WrapPanel x:Name="QualityButtonsPanel"/>
+                                <Button x:Name="CompareQualitiesBtn" Content="Comparar" Height="22" Padding="6,0" MinHeight="0"
+                                        FontSize="8" Background="Transparent" Foreground="#888"
+                                        BorderThickness="1" BorderBrush="#444" Margin="6,0,0,0"
+                                        Click="CompareQualities_Click"/>
                             </StackPanel>
                         </StackPanel>
+
+                        <!-- Quality comparison panel -->
+                        <Border x:Name="QualityComparePanel" IsVisible="False"
+                                Background="#15FFFFFF" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="COMPARAR ESTADOS" Foreground="#888" FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <Button Content="×" Width="16" Height="16" Padding="0" MinHeight="0" Margin="6,0,0,0"
+                                            Background="Transparent" Foreground="#666" BorderThickness="0" FontSize="10"
+                                            Click="QualityCompareClose_Click"/>
+                                </StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Normal" Foreground="#888" FontSize="8" Margin="0,0,0,2"/>
+                                        <TextBlock x:Name="QCBuyNormal"  Foreground="#4CAF50" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock x:Name="QCSellNormal" Foreground="#FF5722" FontSize="9"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Buena" Foreground="#888" FontSize="8" Margin="0,0,0,2"/>
+                                        <TextBlock x:Name="QCBuyGood"  Foreground="#4CAF50" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock x:Name="QCSellGood" Foreground="#FF5722" FontSize="9"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Destacada" Foreground="#888" FontSize="8" Margin="0,0,0,2"/>
+                                        <TextBlock x:Name="QCBuyOut"  Foreground="#4CAF50" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock x:Name="QCSellOut" Foreground="#FF5722" FontSize="9"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Best buy / sell / instant side by side -->
                         <Grid Margin="0,0,0,6">
@@ -336,6 +375,14 @@
                                 <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
                                     <TextBlock Text="Mejor ord. venta" Foreground="#555" FontSize="8" TextAlignment="Right"/>
                                     <TextBlock x:Name="CraftTargetSellText" Foreground="#4CAF50" FontSize="12" FontWeight="Bold" TextAlignment="Right"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                        <TextBlock Text="Rinde:" Foreground="#555" FontSize="8" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBox x:Name="CraftYieldInput" Text="1" Width="36" Height="18"
+                                                 FontSize="9" Background="#1A1A1A" Foreground="White"
+                                                 BorderBrush="#444" Padding="4,1"
+                                                 TextChanged="CraftYield_Changed"/>
+                                        <TextBlock Text="ud." Foreground="#555" FontSize="8" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -381,27 +428,83 @@
 
                         <Border x:Name="CraftSummaryPanel" IsVisible="False"
                                 Background="#1AFFD700" CornerRadius="4" Padding="10,8" Margin="0,4,0,0">
-                            <StackPanel>
-                                <TextBlock Text="RESUMEN" Foreground="#FFD700" FontSize="9" FontWeight="Bold" Margin="0,0,0,6"/>
-                                <Grid>
+                            <StackPanel Spacing="3">
+                                <!-- Header: title + retorno% input + premium toggle -->
+                                <Grid Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="36"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="34"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="20"/>
-                                        <RowDefinition Height="20"/>
-                                        <RowDefinition Height="20"/>
-                                        <RowDefinition Height="22"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Text="Costo materiales:" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" x:Name="CraftTotalCostText" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="1" Text="Precio venta:" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CraftSellPriceText" Foreground="#4CAF50" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="2" Text="Impuesto (8%):" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CraftTaxText" Foreground="#FF4444" FontSize="11" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="3" Text="GANANCIA NETA:" Foreground="#CCC" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="3" Grid.Column="1" x:Name="CraftProfitText" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="RESUMEN" Foreground="#FFD700" FontSize="9"
+                                               FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="Retorno:" Foreground="#888" FontSize="8"
+                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                    <TextBox Grid.Column="2" x:Name="CraftReturnRateInput" Height="18" FontSize="8"
+                                             Background="#1A1A1A" Foreground="White" BorderBrush="#444"
+                                             Padding="4,1" Watermark="0"
+                                             TextChanged="CraftReturn_Changed"/>
+                                    <TextBlock Grid.Column="3" Text="%" Foreground="#888" FontSize="8"
+                                               VerticalAlignment="Center" Margin="2,0,10,0"/>
+                                    <TextBlock Grid.Column="4" Text="Premium:" Foreground="#888" FontSize="8"
+                                               VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <Button Grid.Column="5" x:Name="CraftPremiumBtn" Content="No"
+                                            Height="18" FontSize="8" Padding="4,0" MinHeight="0"
+                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                            Background="Transparent" Foreground="#666"
+                                            BorderThickness="1" BorderBrush="#444"
+                                            Click="CraftPremium_Click"/>
+                                </Grid>
+
+                                <!-- Row: Materiales brutos -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CraftMaterialsLabel" Text="Costo materiales:"
+                                               Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftTotalCostText"
+                                               Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- Row: Retorno (solo visible cuando returnRate > 0) -->
+                                <Grid x:Name="CraftReturnRow" IsVisible="False">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CraftReturnLabel" Text="Retorno (0%):"
+                                               Foreground="#4CAF50" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftReturnText"
+                                               Foreground="#4CAF50" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- Row: Costo neto (solo visible cuando returnRate > 0) -->
+                                <Grid x:Name="CraftNetCostRow" IsVisible="False">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Costo neto:" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftNetCostText"
+                                               Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Row: Precio venta -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Precio venta:" Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftSellPriceText"
+                                               Foreground="#4CAF50" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- Row: Impuesto -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CraftTaxLabel" Text="Impuesto (8%):"
+                                               Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftTaxText"
+                                               Foreground="#FF4444" FontSize="11" VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- Row: Ganancia neta -->
+                                <Grid Margin="0,2,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="GANANCIA NETA:" Foreground="#CCC"
+                                               FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" x:Name="CraftProfitText"
+                                               FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -643,8 +746,6 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="IP: " Foreground="#555" FontSize="9"/>
                                     <TextBlock x:Name="PlayerIPText" Foreground="#AAA" FontSize="9"/>
-                                    <TextBlock Text="  Kills: " Foreground="#555" FontSize="9"/>
-                                    <TextBlock x:Name="PlayerKillCountText" Foreground="#4CAF50" FontSize="9"/>
                                 </StackPanel>
                             </StackPanel>
                         </Grid>
@@ -723,27 +824,56 @@
                                        TextAlignment="Center" Margin="0,5,0,0" IsVisible="False"/>
                         </StackPanel>
 
-                        <StackPanel x:Name="RecentDeathsPanel" IsVisible="False" Margin="0,8,0,0">
-                            <TextBlock Text="ULTIMAS MUERTES" Foreground="#FF4444" FontSize="8" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <ItemsControl x:Name="DeathsList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="0,2">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding KillerName}" Foreground="#FF6666" FontSize="10" FontWeight="SemiBold"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding KillerGuild}" Foreground="#666" FontSize="9" VerticalAlignment="Center" Margin="6,0"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding TimeAgo}" Foreground="#555" FontSize="9" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                            <StackPanel>
+
+                                <StackPanel x:Name="RecentKillsPanel" IsVisible="False" Margin="0,0,0,8">
+                                    <TextBlock Text="KILLS RECIENTES" Foreground="#4CAF50" FontSize="8" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ItemsControl x:Name="KillsList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="0,2"
+                                                        Cursor="Hand" PointerReleased="KillEntry_Click">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding VictimName}" Foreground="#66CC77" FontSize="10" FontWeight="SemiBold"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding VictimGuild}" Foreground="#666" FontSize="9" VerticalAlignment="Center" Margin="6,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TimeAgo}" Foreground="#555" FontSize="9" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <StackPanel x:Name="RecentDeathsPanel" IsVisible="False">
+                                    <TextBlock Text="ULTIMAS MUERTES" Foreground="#FF4444" FontSize="8" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ItemsControl x:Name="DeathsList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,5" Margin="0,2">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding KillerName}" Foreground="#FF6666" FontSize="10" FontWeight="SemiBold"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding KillerGuild}" Foreground="#666" FontSize="9" VerticalAlignment="Center" Margin="6,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TimeAgo}" Foreground="#555" FontSize="9" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </ScrollViewer>
 
                     </StackPanel>
 
@@ -762,7 +892,13 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="OPORTUNIDADES DE FLIP" Foreground="White" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock x:Name="FlipLastScanText" Text="Sin escanear" Foreground="#555" FontSize="8"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Name="FlipLastScanText" Text="Sin escanear" Foreground="#555" FontSize="8" VerticalAlignment="Center"/>
+                                <Button Content="[catálogo]" Padding="0" Height="12"
+                                        Background="Transparent" Foreground="#444" BorderThickness="0"
+                                        FontSize="8" Cursor="Hand" Click="OpenCatalog_Click"
+                                        VerticalAlignment="Center"/>
+                            </StackPanel>
                         </StackPanel>
                         <Button Grid.Column="1" x:Name="ScanNowBtn" Content="Escanear" Width="70" Height="22"
                                 Background="#FF7550" Foreground="White" BorderThickness="0" CornerRadius="4"
@@ -782,6 +918,12 @@
                                      FontSize="9" Background="#1A1A1A" Foreground="White"
                                      BorderBrush="#444" Padding="5,2"
                                      TextChanged="FlipProfitFilter_Changed"/>
+                            <TextBlock Text="Flete%:" Foreground="#888" FontSize="9"
+                                       VerticalAlignment="Center" Margin="10,0,4,0"/>
+                            <TextBox x:Name="TransportPctInput" Text="" Width="36" Height="20"
+                                     FontSize="9" Background="#1A1A1A" Foreground="White"
+                                     BorderBrush="#444" Padding="5,2" Watermark="0"
+                                     TextChanged="FlipTransport_Changed"/>
                             <CheckBox x:Name="PremiumCheckBox" Content="Premium" IsChecked="False"
                                       Foreground="#AAAAAA" FontSize="9" Margin="10,0,0,0"
                                       VerticalAlignment="Center"
@@ -791,8 +933,13 @@
                                    Foreground="#555" FontSize="9" VerticalAlignment="Center"/>
                     </Grid>
 
-                    <!-- City selectors -->
+                    <!-- Category + city selectors -->
                     <StackPanel Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                            <TextBlock Text="Categ.:" Foreground="#888" FontSize="9"
+                                       Width="46" VerticalAlignment="Center"/>
+                            <WrapPanel x:Name="FlipCategoryPanel"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                             <TextBlock Text="Origen:" Foreground="#888" FontSize="9"
                                        Width="46" VerticalAlignment="Center"/>
@@ -817,42 +964,137 @@
                                     <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,6"
                                             Margin="0,2" Cursor="Hand"
                                             PointerReleased="FlipItem_Click">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding ItemName}" Foreground="White"
-                                                               FontSize="11" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding TierLabel}" Foreground="#888"
-                                                               FontSize="9" Margin="5,0,0,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding QualityLabel}" Foreground="#B8860B"
-                                                               FontSize="9" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                    <TextBlock Text="{Binding BuyCity}" Foreground="#4CAF50" FontSize="9"/>
-                                                    <TextBlock Text="{Binding BuyPriceLabel}" Foreground="#4CAF50" FontSize="9" Margin="4,0,0,0"/>
-                                                    <TextBlock Text="{Binding BuyVolumeLabel}" Foreground="#4CAF50" FontSize="8" Opacity="0.55" Margin="2,0,0,0"/>
-                                                    <TextBlock Text=" → " Foreground="#555" FontSize="9"/>
-                                                    <TextBlock Text="{Binding SellCity}" Foreground="#FF5722" FontSize="9"/>
-                                                    <TextBlock Text="{Binding SellPriceLabel}" Foreground="#FF5722" FontSize="9" Margin="4,0,0,0"/>
-                                                    <TextBlock Text="{Binding SellVolumeLabel}" Foreground="#FF5722" FontSize="8" Opacity="0.55" Margin="2,0,0,0"/>
-                                                </StackPanel>
+                                        <StackPanel>
+                                            <!-- Nombre + tier + calidad -->
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding ItemName}" Foreground="White"
+                                                           FontSize="11" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding TierLabel}" Foreground="#888"
+                                                           FontSize="9" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding QualityLabel}" Foreground="#B8860B"
+                                                           FontSize="9" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding ProfitLabel}" Foreground="#FFD700"
-                                                           FontSize="12" FontWeight="Bold" TextAlignment="Right"/>
-                                                <TextBlock Text="{Binding ProfitPctLabel}" Foreground="#FFD700"
-                                                           FontSize="9" TextAlignment="Right"/>
+                                            <!-- Compra -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                <TextBlock Text="compra" Foreground="#555" FontSize="7"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding BuyCity}" Foreground="#4CAF50" FontSize="9"/>
+                                                <TextBlock Text="{Binding BuyPriceLabel}" Foreground="#4CAF50" FontSize="9" Margin="4,0,0,0"/>
+                                                <TextBlock Text="{Binding BuyVolumeLabel}" Foreground="#4CAF50" FontSize="8" Opacity="0.55" Margin="2,0,0,0"/>
                                             </StackPanel>
-                                        </Grid>
+                                            <!-- Venta directa (dir.) -->
+                                            <Grid IsVisible="{Binding HasInstantSell}" Margin="0,2,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="dir." Foreground="#FF5722" FontSize="7"
+                                                                   Opacity="0.7" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="{Binding InstantSellCity}" Foreground="#FF5722" FontSize="9"/>
+                                                        <TextBlock Text="{Binding InstantSellPriceLabel}" Foreground="#FF5722" FontSize="9" FontWeight="SemiBold" Margin="4,0,0,0"/>
+                                                        <TextBlock Text="{Binding InstantSellVolumeLabel}" Foreground="#FF5722" FontSize="8" Opacity="0.55" Margin="2,0,0,0"/>
+                                                    </StackPanel>
+                                                    <TextBlock IsVisible="{Binding HasInstantSellOrderRef}"
+                                                               Text="{Binding InstantSellOrderRefLabel}"
+                                                               Foreground="#FF8A65" FontSize="8" Opacity="0.7" Margin="18,0,0,0"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding InstantProfitLabel}" Foreground="#FFD700"
+                                                               FontSize="11" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding InstantProfitPctLabel}" Foreground="#FFD700"
+                                                               FontSize="8" Margin="4,0,0,0" VerticalAlignment="Center" Opacity="0.75"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <!-- Orden de venta (ord.) -->
+                                            <Grid IsVisible="{Binding HasOrderSell}" Margin="0,2,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="ord." Foreground="#FF8A65" FontSize="7"
+                                                                   Opacity="0.7" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="{Binding OrderSellCity}" Foreground="#FF8A65" FontSize="9"/>
+                                                        <TextBlock Text="{Binding OrderSellPriceLabel}" Foreground="#FF8A65" FontSize="9" FontWeight="SemiBold" Margin="4,0,0,0"/>
+                                                        <TextBlock Text="{Binding OrderSellVolumeLabel}" Foreground="#FF8A65" FontSize="8" Opacity="0.55" Margin="2,0,0,0"/>
+                                                    </StackPanel>
+                                                    <TextBlock IsVisible="{Binding HasOrderSellInstantRef}"
+                                                               Text="{Binding OrderSellInstantRefLabel}"
+                                                               Foreground="#FF5722" FontSize="8" Opacity="0.7" Margin="18,0,0,0"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding OrderProfitLabel}" Foreground="#FFCC44"
+                                                               FontSize="11" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding OrderProfitPctLabel}" Foreground="#FFCC44"
+                                                               FontSize="8" Margin="4,0,0,0" VerticalAlignment="Center" Opacity="0.75"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+
+                    <!-- Flip journal -->
+                    <Border Background="#0DFFFFFF" BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0"
+                            Padding="0,6,0,0" Margin="0,6,0,0">
+                        <StackPanel>
+                            <!-- Journal header -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="HISTORIAL DE FLIPS" Foreground="#444"
+                                               FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="limpiar" Padding="4,0" Height="14"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="#333" FontSize="7" Margin="0,0,4,0"
+                                        Click="FlipJournalClear_Click"/>
+                                <Button x:Name="FlipJournalToggleBtn" Content="▼" Grid.Column="2"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="#444" FontSize="9" Padding="2,0" Height="14"
+                                        Click="FlipJournalToggle_Click"/>
+                            </Grid>
+                            <!-- Journal body (collapsed by default) -->
+                            <StackPanel x:Name="FlipJournalBody" IsVisible="False" Margin="0,4,0,0">
+                                <TextBlock x:Name="FlipJournalTotalText" Text="Sin registros aún"
+                                           Foreground="#555" FontSize="8" Margin="0,0,0,4"/>
+                                <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="FlipJournalList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding DateLabel}"
+                                                               Foreground="#444" FontSize="8"
+                                                               VerticalAlignment="Center" Width="65"/>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding ItemName}" Foreground="#AAA" FontSize="9"/>
+                                                        <TextBlock Text="{Binding RouteLabel}" Foreground="#555" FontSize="8"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding ProfitLabel}"
+                                                               Foreground="#4CAF50" FontSize="9" FontWeight="Bold"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
                 </StackPanel>
 

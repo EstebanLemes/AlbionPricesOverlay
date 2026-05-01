@@ -73,6 +73,7 @@ public class ItemDatabase
                 string? displayName = null;
                 var searchNames = new List<string>();
 
+                string? nameEn = null;
                 if (item.TryGetProperty("LocalizedNames", out var locNames) && locNames.ValueKind == JsonValueKind.Object)
                 {
                     foreach (var locale in LocalePriority)
@@ -87,6 +88,9 @@ public class ItemDatabase
                             }
                         }
                     }
+
+                    if (locNames.TryGetProperty("EN-US", out var enVal) && enVal.ValueKind == JsonValueKind.String)
+                        nameEn = enVal.GetString();
 
                     // Fallback: any locale
                     if (displayName == null)
@@ -110,8 +114,9 @@ public class ItemDatabase
 
                 _items.Add(new ItemEntry
                 {
-                    Name = displayName,
-                    UniqueName = uniqueName,
+                    Name        = displayName,
+                    NameEn      = nameEn ?? "",
+                    UniqueName  = uniqueName,
                     SearchNames = searchNames,
                 });
             }
@@ -187,6 +192,13 @@ public class ItemDatabase
         return item?.Name;
     }
 
+    public string? GetEnglishNameById(string uniqueName)
+    {
+        var item = _items.FirstOrDefault(x => x.UniqueName == uniqueName);
+        if (item == null) return null;
+        return string.IsNullOrEmpty(item.NameEn) ? item.Name : item.NameEn;
+    }
+
     // Returns all UniqueNames that share the same base item id (ignoring tier prefix and @enchant suffix)
     // e.g. baseId="HEAD_CLOTH_AVALON" → [T4_HEAD_CLOTH_AVALON, T5_HEAD_CLOTH_AVALON@1, ...]
     public List<string> GetVariants(string baseId)
@@ -233,6 +245,7 @@ public class ItemDatabase
 public class ItemEntry
 {
     public string Name { get; set; } = "";
+    public string NameEn { get; set; } = "";
     public string UniqueName { get; set; } = "";
     public List<string> SearchNames { get; set; } = new();
 }

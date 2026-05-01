@@ -11,6 +11,14 @@ public class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ServerRegion Region { get; set; } = ServerRegion.Europe;
 
+    public bool    FlipPremium      { get; set; } = false;
+    public string? FlipOrigin       { get; set; }
+    public string? FlipDest         { get; set; }
+    public double  FlipMinProfit    { get; set; } = 1000;
+    public string  FlipCategory     { get; set; } = "Todo";
+    public double  FlipTransportPct { get; set; } = 0;
+    public bool    CraftPremium     { get; set; } = false;
+
     private static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "AlbionPrices", "settings.json");
