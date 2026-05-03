@@ -18,6 +18,7 @@ public class AppSettings
     public string  FlipCategory     { get; set; } = "Todo";
     public double  FlipTransportPct { get; set; } = 0;
     public bool    CraftPremium     { get; set; } = false;
+    public List<IslandConfig> Islands { get; set; } = [];
 
     private static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

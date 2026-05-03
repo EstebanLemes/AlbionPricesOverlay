@@ -54,6 +54,14 @@ public partial class MainWindow : Window
     private Button[]? _modeBtns;
     private Button[]? _calcSubBtns;
 
+    // ── Island / farming state ────────────────────────────────────────────────
+    private readonly FarmingGuideService _farmingGuide = new();
+    private string?  _newIslandCity;
+    private int      _newIslandTier = 4;
+    private Button[]? _newIslandCityBtns;
+    private Button[]? _newIslandTierBtns;
+    private readonly List<(IslandConfig Config, StackPanel RecoPanel, Border Card)> _islandCards = new();
+
     // ── Refining state ────────────────────────────────────────────────────────
     private string _refineResource = "Mineral";
     private int    _refineTier     = 5;
@@ -163,7 +171,7 @@ public partial class MainWindow : Window
         Loaded += async (s, e) =>
         {
             _regionButtons = [RegionNABtn, RegionEUBtn, RegionASBtn];
-            _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn, FlipModeBtn];
+            _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn, FlipModeBtn, IslandModeBtn];
             _calcSubBtns   = [CraftSubBtn, RefineSubBtn, EnchantSubBtn, RouteSubBtn];
             InitRefineSelectors();
             InitRoutePanel();
@@ -273,6 +281,7 @@ public partial class MainWindow : Window
         WatchModeContent.IsVisible    = active == WatchModeContent;
         PlayerModeContent.IsVisible   = active == PlayerModeContent;
         FlipModeContent.IsVisible     = active == FlipModeContent;
+        IslandModeContent.IsVisible   = active == IslandModeContent;
 
         foreach (var btn in _modeBtns ?? [])
         {
@@ -281,6 +290,11 @@ public partial class MainWindow : Window
         }
         activeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
         activeBtn.Foreground = Brushes.White;
+
+        if (active == IslandModeContent)
+            UpdateIslandWindowWidth();
+        else
+            this.Width = 430;
     }
 
     private void SetActiveCalcSub(StackPanel active, Button activeBtn)
@@ -329,6 +343,13 @@ public partial class MainWindow : Window
         SetActiveMode(PlayerModeContent, PlayerModeBtn);
         (Application.Current as App)?.RealtimeService?.SetItem(null);
         PlayerInput.Focus();
+    }
+
+    private void IslandMode_Click(object? sender, RoutedEventArgs e)
+    {
+        SetActiveMode(IslandModeContent, IslandModeBtn);
+        (Application.Current as App)?.RealtimeService?.SetItem(null);
+        if (!_islandTabInitialized) InitIslandTab();
     }
 
     private void FlipMode_Click(object? sender, RoutedEventArgs e)
@@ -3043,6 +3064,472 @@ public partial class MainWindow : Window
     }
 
     private void MinimizeButton_Click(object? sender, RoutedEventArgs e) => Hide();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ISLAND / FARMING TAB
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private bool _islandTabInitialized;
+
+    private void InitIslandTab()
+    {
+        _islandTabInitialized = true;
+        _farmingGuide.LoadRecipes();
+
+        // Build city selector buttons
+        _newIslandCityBtns = FarmingGuideService.AllCities.Select(city =>
+        {
+            var btn = MakeIslandFilterBtn(city, 9);
+            btn.Click += (_, _) =>
+            {
+                _newIslandCity = city;
+                HighlightIslandBtn(_newIslandCityBtns!, btn);
+            };
+            return btn;
+        }).ToArray();
+
+        foreach (var b in _newIslandCityBtns) NewIslandCityPanel.Children.Add(b);
+
+        // Build tier selector buttons (T2–T6)
+        _newIslandTierBtns = Enumerable.Range(2, 5).Select(t =>
+        {
+            var btn = MakeIslandFilterBtn($"T{t}", 9);
+            btn.Click += (_, _) =>
+            {
+                _newIslandTier = t;
+                HighlightIslandBtn(_newIslandTierBtns!, btn);
+            };
+            return btn;
+        }).ToArray();
+
+        foreach (var b in _newIslandTierBtns) NewIslandTierPanel.Children.Add(b);
+        HighlightIslandBtn(_newIslandTierBtns, _newIslandTierBtns[2]); // T4 default
+        _newIslandTier = 4;
+
+        // Restore persisted islands
+        var islands = (Application.Current as App)?.Settings.Islands ?? [];
+        foreach (var cfg in islands.ToList()) AddIslandCardToPanel(cfg);
+        RefreshSynergiesPanel();
+    }
+
+    private void AddIsland_Click(object? sender, RoutedEventArgs e)
+    {
+        AddIslandForm.IsVisible = true;
+        AddIslandBtn.IsEnabled  = false;
+        _newIslandCity          = null;
+        if (_newIslandCityBtns != null)
+            HighlightIslandBtn(_newIslandCityBtns, null);
+    }
+
+    private void AddIslandCancel_Click(object? sender, RoutedEventArgs e)
+    {
+        AddIslandForm.IsVisible = false;
+        AddIslandBtn.IsEnabled  = true;
+        _newIslandCity          = null;
+    }
+
+    private void AddIslandConfirm_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_newIslandCity == null) return;
+
+        var cfg = new IslandConfig { City = _newIslandCity, Tier = _newIslandTier };
+        var app = Application.Current as App;
+        app?.Settings.Islands.Add(cfg);
+        app?.Settings.Save();
+
+        AddIslandCardToPanel(cfg);
+        RefreshSynergiesPanel();
+
+        AddIslandForm.IsVisible = false;
+        AddIslandBtn.IsEnabled  = true;
+        _newIslandCity          = null;
+    }
+
+    private void AddIslandCardToPanel(IslandConfig cfg)
+    {
+        var recoPanel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        recoPanel.Children.Add(new TextBlock
+        {
+            Text       = "Presioná \"Ver precios\" para cargar recomendaciones",
+            Foreground = new SolidColorBrush(Color.Parse("#506070")),
+            FontSize   = 8,
+            FontStyle  = Avalonia.Media.FontStyle.Italic,
+        });
+
+        var headerStack = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
+
+        var titleTb = new TextBlock
+        {
+            Text       = $"{cfg.City}  T{cfg.Tier}  ({cfg.Plots} parcelas)",
+            Foreground = new SolidColorBrush(Color.Parse("#FF7550")),
+            FontSize   = 10,
+            FontWeight = FontWeight.Bold,
+        };
+
+        var craftBonus = _farmingGuide.GetCraftingBonus(cfg.City);
+        if (craftBonus != null)
+        {
+            titleTb.Text += "  ✦";
+            ToolTip.SetTip(titleTb, $"Bonus de crafteo: {craftBonus}");
+        }
+
+        var removeBtn = new Button
+        {
+            Content         = "×",
+            Background      = Brushes.Transparent,
+            Foreground      = new SolidColorBrush(Color.Parse("#FF6060")),
+            BorderThickness = new Thickness(0),
+            Padding         = new Thickness(0),
+            Margin          = new Thickness(8, 0, 0, 0),
+            FontSize        = 14,
+            Cursor          = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+        var card = new Border
+        {
+            Width           = 375,
+            Background      = new SolidColorBrush(Color.Parse("#18FFFFFF")),
+            BorderBrush     = new SolidColorBrush(Color.Parse("#FF7550")),
+            BorderThickness = new Thickness(2, 0, 0, 0),
+            CornerRadius    = new CornerRadius(0, 4, 4, 0),
+            Padding         = new Thickness(10, 8),
+            Margin          = new Thickness(0, 0, 10, 10),
+        };
+
+        removeBtn.Click += (_, _) => RemoveIslandCard(cfg, card);
+
+        headerStack.Children.Add(titleTb);
+        headerStack.Children.Add(removeBtn);
+
+        // Avoid section
+        var avoidItems = _farmingGuide.GetAvoid(cfg.City);
+        var avoidPanel = new StackPanel
+        {
+            Margin     = new Thickness(0, 8, 0, 0),
+            Background = new SolidColorBrush(Color.Parse("#0AFF4444")),
+        };
+        avoidPanel.Children.Add(new TextBlock
+        {
+            Text       = "⊘  NO PLANTAR:",
+            Foreground = new SolidColorBrush(Color.Parse("#E57373")),
+            FontSize   = 8,
+            FontWeight = FontWeight.Bold,
+            Margin     = new Thickness(0, 0, 0, 3),
+        });
+        foreach (var item in avoidItems)
+            avoidPanel.Children.Add(new TextBlock
+            {
+                Text       = $"  • {item}",
+                Foreground = new SolidColorBrush(Color.Parse("#8090A0")),
+                FontSize   = 8,
+            });
+
+        var mainStack = new StackPanel();
+        mainStack.Children.Add(headerStack);
+        mainStack.Children.Add(recoPanel);
+        mainStack.Children.Add(avoidPanel);
+        card.Child = mainStack;
+
+        _islandCards.Add((cfg, recoPanel, card));
+        IslandCardsPanel.Children.Add(card);
+        if (IslandModeContent.IsVisible) UpdateIslandWindowWidth();
+    }
+
+    private void RemoveIslandCard(IslandConfig cfg, Border card)
+    {
+        IslandCardsPanel.Children.Remove(card);
+        _islandCards.RemoveAll(x => x.Card == card);
+
+        var app = Application.Current as App;
+        app?.Settings.Islands.RemoveAll(i => i.City == cfg.City && i.Tier == cfg.Tier);
+        app?.Settings.Save();
+        RefreshSynergiesPanel();
+        UpdateIslandWindowWidth();
+    }
+
+    private async void IslandFetchPrices_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_islandCards.Count == 0) return;
+
+        IslandFetchPricesBtn.IsEnabled = false;
+        IslandFetchPricesBtn.Content   = "Cargando…";
+
+        try
+        {
+            var configs  = _islandCards.Select(x => x.Config).ToList();
+            var itemIds  = _farmingGuide.GetAllItemIds(configs).ToList();
+            var api      = _apiService;
+
+            var raw = await api.GetBatchPricesAsync(itemIds);
+            if (raw == null || raw.Count == 0) return;
+
+            var priceMap = raw
+                .Where(p => p.SellPriceMin > 0 && p.ItemId != null && p.City != null)
+                .GroupBy(p => (p.ItemId!, p.City!))
+                .ToDictionary(g => g.Key, g => g.Min(p => p.SellPriceMin ?? 0));
+
+            foreach (var (cfg, recoPanel, _) in _islandCards)
+                PopulateIslandCard(cfg, recoPanel, priceMap);
+
+            RefreshSynergiesPanel(priceMap);
+        }
+        finally
+        {
+            IslandFetchPricesBtn.IsEnabled = true;
+            IslandFetchPricesBtn.Content   = "Ver precios";
+        }
+    }
+
+    private void PopulateIslandCard(
+        IslandConfig cfg,
+        StackPanel   recoPanel,
+        Dictionary<(string itemId, string city), double> priceMap)
+    {
+        recoPanel.Children.Clear();
+
+        var bonuses = _farmingGuide.GetBonuses(cfg.City);
+        if (bonuses.Count == 0) return;
+
+        recoPanel.Children.Add(new TextBlock
+        {
+            Text       = "✦  PLANTAR / CRIAR:",
+            Foreground = new SolidColorBrush(Color.Parse("#4CAF50")),
+            FontSize   = 8,
+            FontWeight = FontWeight.Bold,
+            Margin     = new Thickness(0, 0, 0, 4),
+        });
+
+        foreach (var bonus in bonuses)
+        {
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var prioColor = bonus.Priority == FarmPriority.Alta ? "#5DC961" : "#8AA0B0";
+
+            var nameText = new TextBlock
+            {
+                Foreground = new SolidColorBrush(Color.Parse(prioColor)),
+                FontSize   = 9,
+                Margin     = new Thickness(0, 1, 0, 0),
+            };
+
+            if (bonus.Type == FarmItemType.Animal)
+            {
+                nameText.Text = $"{bonus.NameEs} T{bonus.Tier}";
+                if (!string.IsNullOrEmpty(bonus.Notes))
+                    ToolTip.SetTip(nameText, bonus.Notes);
+            }
+            else
+            {
+                nameText.Text = $"{bonus.NameEs} T{bonus.Tier}  [{bonus.Type}]";
+                if (!string.IsNullOrEmpty(bonus.Notes))
+                    ToolTip.SetTip(nameText, bonus.Notes);
+            }
+
+            Grid.SetColumn(nameText, 0);
+
+            // Price column
+            var priceStack = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+            var sellPrice  = GetCityPrice(priceMap, bonus.ItemId, cfg.City);
+
+            if (bonus.Type == FarmItemType.Animal && bonus.ProductItemId != null)
+            {
+                var productPrice = GetCityPrice(priceMap, bonus.ProductItemId, cfg.City);
+                var priceText    = productPrice > 0
+                    ? $"{bonus.ProductNameEs}: {productPrice:N0}s"
+                    : $"{bonus.ProductNameEs}: —";
+
+                priceStack.Children.Add(new TextBlock
+                {
+                    Text       = priceText,
+                    Foreground = new SolidColorBrush(Color.Parse("#FFD700")),
+                    FontSize   = 8,
+                });
+
+                if (bonus.HasButcherBonus)
+                    priceStack.Children.Add(new TextBlock
+                    {
+                        Text       = "  +10% carne",
+                        Foreground = new SolidColorBrush(Color.Parse("#FF8A65")),
+                        FontSize   = 7,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    });
+            }
+            else if (sellPrice > 0)
+            {
+                priceStack.Children.Add(new TextBlock
+                {
+                    Text       = $"{sellPrice:N0}s",
+                    Foreground = new SolidColorBrush(Color.Parse("#FFD700")),
+                    FontSize   = 9,
+                });
+            }
+
+            Grid.SetColumn(priceStack, 1);
+            row.Children.Add(nameText);
+            row.Children.Add(priceStack);
+            recoPanel.Children.Add(row);
+
+            // Animal food hint
+            if (bonus.Type == FarmItemType.Animal && bonus.FavFoodId != null)
+            {
+                var configs   = _islandCards.Select(x => x.Config).ToList();
+                var ownFood   = configs.Any(c => c.City == bonus.FoodBonusCity && c.City != cfg.City);
+                var foodPrice = GetCityPrice(priceMap, bonus.FavFoodId, bonus.FoodBonusCity ?? cfg.City);
+                var foodBonus = _farmingGuide.GetBonuses(bonus.FoodBonusCity ?? "")
+                    .FirstOrDefault(b => b.ItemId == bonus.FavFoodId)?.NameEs ?? bonus.FavFoodId;
+
+                var hint = ownFood
+                    ? $"  ★ Comida favorita: {foodBonus} de tu isla en {bonus.FoodBonusCity} (+10%) → mitad de consumo"
+                    : $"  ↳ Comida favorita: {foodBonus} (bonus en {bonus.FoodBonusCity}){(foodPrice > 0 ? $" ~ {foodPrice:N0}s/ud." : "")}";
+
+                recoPanel.Children.Add(new TextBlock
+                {
+                    Text       = hint,
+                    Foreground = new SolidColorBrush(Color.Parse(ownFood ? "#4CAF50" : "#7890A8")),
+                    FontSize   = 7,
+                    Margin     = new Thickness(0, 0, 0, 2),
+                });
+            }
+        }
+    }
+
+    private void RefreshSynergiesPanel(
+        Dictionary<(string itemId, string city), double>? priceMap = null)
+    {
+        var configs    = _islandCards.Select(x => x.Config).ToList();
+        var synergies  = _farmingGuide.DetectSynergies(configs);
+
+        IslandSynergiesPanel.IsVisible = synergies.Count > 0;
+        SynergyItemsPanel.Children.Clear();
+
+        foreach (var syn in synergies)
+        {
+            var accentColor = syn.IsFullyCovered ? "#4CAF50" : "#FF8A65";
+            var bgColor     = syn.IsFullyCovered ? "#0C1F2B18" : "#0C2B1E10";
+            var icon        = syn.IsFullyCovered ? "✓" : "◑";
+
+            var titleRow = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Margin      = new Thickness(0, 0, 0, 4),
+            };
+            titleRow.Children.Add(new Border
+            {
+                Background    = new SolidColorBrush(Color.Parse(accentColor)),
+                CornerRadius  = new CornerRadius(2),
+                Padding       = new Thickness(4, 1),
+                Margin        = new Thickness(0, 0, 6, 0),
+                Child         = new TextBlock
+                {
+                    Text       = icon,
+                    Foreground = Brushes.White,
+                    FontSize   = 8,
+                    FontWeight = FontWeight.Bold,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                },
+            });
+            titleRow.Children.Add(new TextBlock
+            {
+                Text       = syn.Title,
+                Foreground = new SolidColorBrush(Color.Parse(accentColor)),
+                FontSize   = 9,
+                FontWeight = FontWeight.Bold,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            });
+
+            var synBorder = new Border
+            {
+                Background      = new SolidColorBrush(Color.Parse(bgColor)),
+                BorderBrush     = new SolidColorBrush(Color.Parse(accentColor)),
+                BorderThickness = new Thickness(2, 0, 0, 0),
+                CornerRadius    = new CornerRadius(0, 4, 4, 0),
+                Padding         = new Thickness(10, 7, 8, 8),
+                Margin          = new Thickness(0, 0, 0, 6),
+            };
+
+            var synStack = new StackPanel();
+            synStack.Children.Add(titleRow);
+            synStack.Children.Add(new TextBlock
+            {
+                Text         = syn.Description,
+                Foreground   = new SolidColorBrush(Color.Parse("#A0B4C4")),
+                FontSize     = 8,
+                TextWrapping = TextWrapping.Wrap,
+            });
+
+            // Show recipe output price if available
+            if (priceMap != null && syn.Recipe != null)
+            {
+                var outputPrice = priceMap
+                    .Where(kv => kv.Key.itemId == syn.Recipe.OutputId)
+                    .Select(kv => kv.Value)
+                    .DefaultIfEmpty(0)
+                    .Max();
+
+                if (outputPrice > 0)
+                    synStack.Children.Add(new TextBlock
+                    {
+                        Text       = $"Output: {outputPrice:N0}s",
+                        Foreground = new SolidColorBrush(Color.Parse("#FFD700")),
+                        FontSize   = 8,
+                        FontWeight = FontWeight.Bold,
+                        Margin     = new Thickness(0, 4, 0, 0),
+                    });
+            }
+
+            synBorder.Child = synStack;
+            SynergyItemsPanel.Children.Add(synBorder);
+        }
+    }
+
+    private static double GetCityPrice(
+        Dictionary<(string itemId, string city), double> map,
+        string itemId, string city)
+    {
+        map.TryGetValue((itemId, city), out var price);
+        return price;
+    }
+
+    private static Button MakeIslandFilterBtn(string label, int fontSize = 9)
+        => new()
+        {
+            Content         = label,
+            Height          = 22,
+            FontSize        = fontSize,
+            Background      = Brushes.Transparent,
+            Foreground      = new SolidColorBrush(Color.Parse("#8AABB8")),
+            BorderThickness = new Thickness(1),
+            BorderBrush     = new SolidColorBrush(Color.Parse("#3A4A58")),
+            CornerRadius    = new CornerRadius(3),
+            Padding         = new Thickness(8, 0),
+            Margin          = new Thickness(0, 0, 5, 5),
+        };
+
+    private void UpdateIslandWindowWidth()
+    {
+        // Card=375 + rightMargin=10 = 385 per slot.
+        // Window overhead: border(4) + contentMargin(30) + buffer(20) = 54px.
+        // Formula: cols * 385 + 54, min 430.
+        var count = Math.Max(1, _islandCards.Count);
+        var cols  = Math.Min(count, 3);
+        this.Width = Math.Max(430, cols * 385 + 54);
+    }
+
+    private static void HighlightIslandBtn(Button[] btns, Button? active)
+    {
+        foreach (var b in btns)
+        {
+            b.Background = active == b
+                ? new SolidColorBrush(Color.Parse("#FF7550"))
+                : Brushes.Transparent;
+            b.Foreground = active == b
+                ? Brushes.White
+                : new SolidColorBrush(Color.Parse("#666"));
+        }
+    }
 
     private void UpdateBanner_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {

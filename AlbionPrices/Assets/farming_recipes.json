@@ -1,0 +1,112 @@
+[
+  {
+    "outputId": "POTION_BARRICADE_T4",
+    "outputName": "Poción de Resistencia T4",
+    "outputQty": 3,
+    "category": "Pocion",
+    "craftingBonusCity": "Brecilien",
+    "ingredients": [
+      { "itemId": "T4_GOATMILK",    "nameEs": "Leche de cabra T4",   "qty": 2, "bonusCity": "Bridgewatch" },
+      { "itemId": "T5_TEASEL_ROOT", "nameEs": "Cardo borriqueño T5", "qty": 2, "bonusCity": "Bridgewatch" }
+    ]
+  },
+  {
+    "outputId": "POTION_POISON_T4",
+    "outputName": "Poción de Veneno Menor T4",
+    "outputQty": 3,
+    "category": "Pocion",
+    "craftingBonusCity": "Brecilien",
+    "ingredients": [
+      { "itemId": "T4_BURDOCK_ROOT",      "nameEs": "Bardana almenada T4",        "qty": 2, "bonusCity": "Lymhurst" },
+      { "itemId": "T3_BRIGHTBLOOM_STALK", "nameEs": "Consuelda hojabrillante T3", "qty": 2, "bonusCity": "Caerleon" }
+    ]
+  },
+  {
+    "outputId": "POTION_POISON_T7",
+    "outputName": "Poción de Veneno Mayor T7",
+    "outputQty": 3,
+    "category": "Pocion",
+    "craftingBonusCity": "Brecilien",
+    "ingredients": [
+      { "itemId": "T7_FIRETOUCHED_MULLEIN", "nameEs": "Gordolobo de fuego T7",    "qty": 2, "bonusCity": "Thetford"      },
+      { "itemId": "T7_GHOUL_YARROW",        "nameEs": "Milenrama demoniaca T7",   "qty": 2, "bonusCity": "Fort Sterling"  },
+      { "itemId": "T7_DRAGON_TEASEL",       "nameEs": "Cardo de dragón T7",       "qty": 2, "bonusCity": "Bridgewatch"    },
+      { "itemId": "T8_COWSMILK",            "nameEs": "Leche de vaca T8",         "qty": 2, "bonusCity": "Martlock"       }
+    ]
+  },
+  {
+    "outputId": "POTION_HEALING_T6",
+    "outputName": "Poción de Curación T6",
+    "outputQty": 3,
+    "category": "Pocion",
+    "craftingBonusCity": "Brecilien",
+    "ingredients": [
+      { "itemId": "T6_FOXGLOVE",  "nameEs": "Dedalera esquiva T6", "qty": 4, "bonusCity": "Martlock" }
+    ]
+  },
+  {
+    "outputId": "POTION_ENERGY_T6",
+    "outputName": "Poción de Energía T6",
+    "outputQty": 3,
+    "category": "Pocion",
+    "craftingBonusCity": "Brecilien",
+    "ingredients": [
+      { "itemId": "T6_POTATO", "nameEs": "Patata T6", "qty": 4, "bonusCity": "Martlock" }
+    ]
+  },
+  {
+    "outputId": "MEAL_PORK_OMELETTE",
+    "outputName": "Comida T7 (carne de cerdo)",
+    "outputQty": 3,
+    "category": "Comida",
+    "craftingBonusCity": "Caerleon",
+    "ingredients": [
+      { "itemId": "T7_RAW_PORK", "nameEs": "Carne de cerdo T7", "qty": 2, "bonusCity": "Thetford"    },
+      { "itemId": "T7_CORN",     "nameEs": "Maíz T7",           "qty": 2, "bonusCity": "Bridgewatch" }
+    ]
+  },
+  {
+    "outputId": "MEAL_BEEF_TOP",
+    "outputName": "Comida top-tier T8 (leche de vaca)",
+    "outputQty": 3,
+    "category": "Comida",
+    "craftingBonusCity": "Caerleon",
+    "ingredients": [
+      { "itemId": "T8_COWSMILK", "nameEs": "Leche de vaca T8", "qty": 2, "bonusCity": "Martlock"    },
+      { "itemId": "T7_CORN",     "nameEs": "Maíz T7",          "qty": 2, "bonusCity": "Bridgewatch" }
+    ]
+  },
+  {
+    "outputId": "MEAL_GOOSE_EGG",
+    "outputName": "Comida T5 (huevos de ganso)",
+    "outputQty": 3,
+    "category": "Comida",
+    "craftingBonusCity": "Caerleon",
+    "ingredients": [
+      { "itemId": "T5_GOOSE_EGG", "nameEs": "Huevos de ganso T5", "qty": 2, "bonusCity": "Lymhurst" },
+      { "itemId": "T8_PUMPKIN",   "nameEs": "Calabaza T8",         "qty": 2, "bonusCity": "Lymhurst" }
+    ]
+  },
+  {
+    "outputId": "MEAL_SHEEP_MILK",
+    "outputName": "Comida T6 (leche de oveja)",
+    "outputQty": 3,
+    "category": "Comida",
+    "craftingBonusCity": "Caerleon",
+    "ingredients": [
+      { "itemId": "T6_SHEEPSMILK", "nameEs": "Leche de oveja T6", "qty": 2, "bonusCity": "Fort Sterling" },
+      { "itemId": "T4_TURNIP",     "nameEs": "Nabo T4",            "qty": 2, "bonusCity": "Fort Sterling" }
+    ]
+  },
+  {
+    "outputId": "MEAL_CHICKEN_EGG",
+    "outputName": "Comida T3 (huevos de gallina)",
+    "outputQty": 3,
+    "category": "Comida",
+    "craftingBonusCity": "Caerleon",
+    "ingredients": [
+      { "itemId": "T3_HEN_EGG", "nameEs": "Huevos de gallina T3", "qty": 2, "bonusCity": "Fort Sterling" },
+      { "itemId": "T3_WHEAT",   "nameEs": "Trigo T3",              "qty": 2, "bonusCity": "Martlock"      }
+    ]
+  }
+]

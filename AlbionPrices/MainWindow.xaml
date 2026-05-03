@@ -50,7 +50,11 @@
                         <Button x:Name="FlipModeBtn"    Content="Flip"     Width="40" Height="20"
                                 Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,6,0" Click="FlipMode_Click"/>
+                                FontSize="9" Margin="0,0,2,0" Click="FlipMode_Click"/>
+                        <Button x:Name="IslandModeBtn"  Content="Isla"     Width="40" Height="20"
+                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#666" BorderThickness="0"
+                                FontSize="9" Margin="0,0,6,0" Click="IslandMode_Click"/>
                         <Button Content="_" Width="32" Height="32" Padding="0" MinHeight="0"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" BorderThickness="0"
@@ -1095,6 +1099,65 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+
+                </StackPanel>
+
+                <!-- ═══════════════════ ISLAND MODE ═══════════════════ -->
+                <StackPanel x:Name="IslandModeContent" IsVisible="False">
+
+                    <!-- Header -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="GUÍA DE ISLAS" Foreground="#FF7550" FontSize="10"
+                                   FontWeight="Bold" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="IslandFetchPricesBtn" Content="Ver precios" Height="22" FontSize="9"
+                                    Background="#1A4CAF50" Foreground="#4CAF50"
+                                    BorderThickness="1" BorderBrush="#4CAF50"
+                                    Padding="8,0" Margin="0,0,6,0" Click="IslandFetchPrices_Click"/>
+                            <Button x:Name="AddIslandBtn" Content="+ Isla" Height="22" FontSize="9"
+                                    Background="#FF7550" Foreground="White" BorderThickness="0"
+                                    Padding="8,0" Click="AddIsland_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Add island form -->
+                    <Border x:Name="AddIslandForm" IsVisible="False" Background="#18FFFFFF"
+                            BorderBrush="#2A3A48" BorderThickness="1" CornerRadius="4"
+                            Padding="10,8" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="Ciudad:" Foreground="#8AABB8" FontSize="8" Margin="0,0,0,4"/>
+                            <WrapPanel x:Name="NewIslandCityPanel" Margin="0,0,0,8"/>
+                            <TextBlock Text="Tier de isla:" Foreground="#8AABB8" FontSize="8" Margin="0,0,0,4"/>
+                            <WrapPanel x:Name="NewIslandTierPanel" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Cancelar" Height="20" FontSize="8"
+                                        Background="Transparent" Foreground="#8A9BAA" BorderThickness="0"
+                                        Margin="0,0,8,0" Click="AddIslandCancel_Click"/>
+                                <Button x:Name="AddIslandConfirmBtn" Content="Agregar" Height="20" FontSize="8"
+                                        Background="#FF7550" Foreground="White" BorderThickness="0"
+                                        Padding="10,0" Click="AddIslandConfirm_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Island cards (populated by code) -->
+                    <WrapPanel x:Name="IslandCardsPanel" Orientation="Horizontal"/>
+
+                    <!-- Synergy section -->
+                    <StackPanel x:Name="IslandSynergiesPanel" IsVisible="False" Margin="0,10,0,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border Background="#4CAF50" Width="3" CornerRadius="2" Margin="0,0,8,0"/>
+                                <TextBlock Text="SINERGIAS DETECTADAS" Foreground="#4CAF50"
+                                           FontSize="9" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="SynergyItemsPanel"/>
+                        </StackPanel>
+                    </StackPanel>
 
                 </StackPanel>
 
