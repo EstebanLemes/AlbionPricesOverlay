@@ -7,12 +7,34 @@ Press `Ctrl+D` from anywhere — the overlay appears centered on screen, shows p
 ## Features
 
 - **Global hotkey** `Ctrl+D` — show/hide from anywhere, even inside the game
+- **Multi-server support** — switch between NA, EU, and Asia servers instantly
+- **Live gold price** — shows current gold price in silver (auto-refreshes)
 - **Item search** — search by name in Spanish, English, or Portuguese
 - **Live prices** — buy/sell prices from all major cities via the [Albion Online Data Project](https://www.albion-online-data.com/)
-- **Best city highlight** — instantly shows the cheapest city to buy and the best city to sell
+- **Best city highlight** — instantly shows the cheapest city to buy, best to sell, and fastest instant sell
 - **Tier & enchantment selector** — switch T4/T5/T6... and .1/.2/.3 enchantments with one click, prices refresh automatically
+- **Quality comparison** — compare prices across Normal, Good, and Outstanding quality items
+- **Price history** — visual sparkline showing price trends for the last 7 days
+- **Flip calculator** — calculates optimal buy/sell routes with profit margins
+- **Favorites** — save items for quick access
+- **Watchlist** — monitor multiple items with auto-refresh prices
+- **Player search** — look up players and view their equipment
+- **Island tracking** — view island resources and calculations
+- **Item stats & crafting** — detailed item statistics and crafting recipes
 - **System tray** — lives in the tray when not in use; double-click or use the hotkey to bring it back
 - **Auto-update** — detects new GitHub releases on startup and installs updates automatically
+- **Recent searches** — quick access to your search history
+
+### Modes
+
+| Mode | Description |
+|---|---|
+| **Precios** | Main price lookup with city-by-city breakdown |
+| **Craft** | Crafting calculator with refinement, enchantment, and route tabs |
+| **Watch** | Monitored items with auto-refresh |
+| **Jugador** | Player search and equipment viewer |
+| **Flip** | Optimal flip calculator with profit analysis |
+| **Isla** | Island resource tracking and calculations |
 
 ## Installation
 
@@ -29,10 +51,12 @@ Download from the [latest release](https://github.com/EstebanLemes/AlbionPricesO
 
 1. Launch `AlbionPrices.exe` — it starts minimized in the system tray
 2. Press **Ctrl+D** (or double-click the tray icon) to open the overlay
-3. Type an item name and press **Enter** or click **Check**
-4. The overlay shows buy/sell prices per city and highlights the best options
-5. For tiered items, use the **Tier** and **Enchant** buttons to switch variants — prices refresh instantly
-6. Click anywhere outside the overlay to hide it
+3. Select your server (NA/EU/AS) from the top selector
+4. Type an item name and press **Enter** or click **Check**
+5. The overlay shows buy/sell prices per city and highlights the best options
+6. For tiered items, use the **Tier** and **Enchant** buttons to switch variants — prices refresh instantly
+7. Click anywhere outside the overlay to hide it
+8. Use the sidebar to switch between Prices/Craft/Watch/Player/Flip/Island modes
 
 ### Keyboard shortcuts
 
@@ -83,6 +107,7 @@ The script automatically:
 |---|---|
 | Live prices | [albion-online-data.com](https://west.albion-online-data.com/api/v2/stats/prices/) |
 | Item database | [ao-data/ao-bin-dumps](https://github.com/ao-data/ao-bin-dumps) |
+| Player data | [Albion Online API](https://gameinfo.albiononline.com/api/gameinfo/) |
 
 Prices are fetched live on each search. The item database (~17 MB) is downloaded from GitHub on first launch and kept in memory for the session.
 
@@ -90,6 +115,7 @@ Prices are fetched live on each search. The item database (~17 MB) is downloaded
 
 - **Framework:** WPF on .NET 10, self-contained `win-x64`
 - **Prices API:** Albion Online Data Project v2
+- **Player API:** Albion Online Gameinfo API
 - **Item DB:** ao-data/ao-bin-dumps (JSON, downloaded at runtime)
 - **Installer:** Inno Setup 6
 
