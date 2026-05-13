@@ -2,9 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="AlbionPrices.MainWindow"
         Title="AlbionPrices"
-        Width="430"
-        MinWidth="420" MinHeight="220"
-        SizeToContent="Height"
+        Width="1200" Height="760"
+        MinWidth="760" MinHeight="520"
+        SizeToContent="Manual"
         SystemDecorations="None"
         TransparencyLevelHint="Transparent"
         Background="Transparent"
@@ -13,87 +13,223 @@
         WindowStartupLocation="Manual">
     <Border Background="#E6101012" BorderBrush="#FF7550" BorderThickness="2" CornerRadius="8"
             BoxShadow="0 0 15 0 #99FF7550">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="32"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Grid ColumnDefinitions="156,*">
+            <!-- Sidebar navigation -->
+            <Border Grid.Column="0" Background="#F20F1116" CornerRadius="6,0,0,6"
+                    BorderBrush="#242830" BorderThickness="0,0,1,0"
+                    PointerPressed="TitleBar_PointerPressed">
+                <Grid RowDefinitions="Auto,*,Auto" Margin="10,10,10,8">
+                    <StackPanel Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                            <Ellipse x:Name="LiveDot" Width="6" Height="6" Fill="#555" Margin="7,0,0,0" VerticalAlignment="Center" ToolTip.Tip="Sin conexion en tiempo real"/>
+                        </StackPanel>
+                        <TextBlock Text="market overlay" Foreground="#5B6270" FontSize="9" Margin="1,2,0,0"/>
+                    </StackPanel>
 
-            <!-- Title bar -->
-            <Border Grid.Row="0" Background="#FF1A1520" CornerRadius="6,6,0,0" PointerPressed="TitleBar_PointerPressed">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Margin="10,0" VerticalAlignment="Center">
-                        <TextBlock Text="AlbionPrices" Foreground="#FF7550" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
-                        <Ellipse x:Name="LiveDot" Width="6" Height="6" Fill="#555" Margin="7,0,0,0" VerticalAlignment="Center" ToolTip.Tip="Sin conexion en tiempo real"/>
+                    <StackPanel Grid.Row="1" Spacing="6">
+                        <Button x:Name="PriceModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="#22FF7550" Foreground="White" BorderThickness="1" BorderBrush="#FF7550"
+                                FontSize="11" FontWeight="Bold" Click="PriceMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#33FF7550" HorizontalAlignment="Left">
+                                    <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Ellipse Canvas.Left="3" Canvas.Top="2" Width="10" Height="10" Fill="#FFD26A"/>
+                                            <Ellipse Canvas.Left="5.2" Canvas.Top="4.2" Width="5.6" Height="5.6" Stroke="#7A4218" StrokeThickness="1.1"/>
+                                            <Path Data="M3,9 C3,11.5 13,11.5 13,9 L13,12 C13,14 3,14 3,12 Z" Fill="#C96F2A"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Precios" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="CraftingModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#7A8290" BorderThickness="1" BorderBrush="Transparent"
+                                FontSize="11" Click="CraftingMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#18202A" HorizontalAlignment="Left">
+                                    <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Path Data="M2,5 L6,1 L8,3 L4,7 Z" Fill="#B5C0CC"/>
+                                            <Path Data="M6,6 L8,4 L14,10 L12,12 Z" Fill="#D58A45"/>
+                                            <Path Data="M1.8,12.8 L5,9.6 L6.4,11 L3.2,14.2 Z" Fill="#8FA1B5"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Craft" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="WatchModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#7A8290" BorderThickness="1" BorderBrush="Transparent"
+                                FontSize="11" Click="WatchMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#18202A" HorizontalAlignment="Left">
+                                    <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Path Data="M1.5,8 C3.5,4.5 6,3 8,3 C10,3 12.5,4.5 14.5,8 C12.5,11.5 10,13 8,13 C6,13 3.5,11.5 1.5,8 Z" Fill="#2A4159"/>
+                                            <Ellipse Canvas.Left="5" Canvas.Top="5" Width="6" Height="6" Fill="#7FB7FF"/>
+                                            <Ellipse Canvas.Left="7" Canvas.Top="7" Width="2" Height="2" Fill="#071019"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Watch" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="PlayerModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#7A8290" BorderThickness="1" BorderBrush="Transparent"
+                                FontSize="11" Click="PlayerMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#18202A" HorizontalAlignment="Left">
+                                    <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Ellipse Canvas.Left="5" Canvas.Top="2" Width="6" Height="6" Fill="#D9B38C"/>
+                                            <Path Data="M3,14 C3.4,10.8 5.3,9 8,9 C10.7,9 12.6,10.8 13,14 Z" Fill="#5B8DFF"/>
+                                            <Path Data="M5,5 C6,2.8 10,2.8 11,5 L10.3,3.2 C8.8,2.2 6.4,2.3 5,5 Z" Fill="#4A2D1B"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Jugador" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="FlipModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#7A8290" BorderThickness="1" BorderBrush="Transparent"
+                                FontSize="11" Click="FlipMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#18202A" HorizontalAlignment="Left">
+                                    <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Path Data="M3,5 L11,5 L11,3 L15,6.5 L11,10 L11,8 L3,8 Z" Fill="#4CAF50"/>
+                                            <Path Data="M13,11 L5,11 L5,13 L1,9.5 L5,6 L5,8 L13,8 Z" Fill="#FF7550"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Flip" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="IslandModeBtn" Width="134" Height="42"
+                                Padding="9,0" MinHeight="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#7A8290" BorderThickness="1" BorderBrush="Transparent"
+                                FontSize="11" Click="IslandMode_Click">
+                            <Grid ColumnDefinitions="28,*">
+                                <Border Width="22" Height="22" CornerRadius="4" Background="#18202A" HorizontalAlignment="Left">
+                                    <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="16" Height="16">
+                                            <Path Data="M2,13 C4,10.5 12,10.5 14,13 Z" Fill="#D6A04A"/>
+                                            <Path Data="M8,12 L9,5 L10.2,5.3 L9.2,12 Z" Fill="#7B4E26"/>
+                                            <Path Data="M9,5 C6,4 4.5,5.2 3.3,7.2 C5.8,7.2 7.8,6.7 9,5 Z" Fill="#4CAF50"/>
+                                            <Path Data="M9,5 C11.8,3.8 13.5,4.8 15,6.4 C12.4,7 10.4,6.5 9,5 Z" Fill="#62C264"/>
+                                            <Path Data="M9,5 C8.2,2.8 9.2,1.3 11.2,0.8 C11.2,3.2 10.5,4.4 9,5 Z" Fill="#5DBB63"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="Isla" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="PriceModeBtn"   Content="Precios"  Width="46" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="#FF7550" Foreground="White" BorderThickness="0"
-                                FontSize="9" FontWeight="Bold" Margin="0,0,2,0" Click="PriceMode_Click"/>
-                        <Button x:Name="CraftingModeBtn" Content="Craft"   Width="40" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,2,0" Click="CraftingMode_Click"/>
-                        <Button x:Name="WatchModeBtn"   Content="Watch"    Width="40" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,2,0" Click="WatchMode_Click"/>
-                        <Button x:Name="PlayerModeBtn"  Content="Jugador"  Width="46" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,2,0" Click="PlayerMode_Click"/>
-                        <Button x:Name="FlipModeBtn"    Content="Flip"     Width="40" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,2,0" Click="FlipMode_Click"/>
-                        <Button x:Name="IslandModeBtn"  Content="Isla"     Width="40" Height="20"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
-                                FontSize="9" Margin="0,0,6,0" Click="IslandMode_Click"/>
-                        <Button Content="_" Width="32" Height="32" Padding="0" MinHeight="0"
-                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" BorderThickness="0"
-                                Foreground="#888" FontWeight="Bold" Click="MinimizeButton_Click" VerticalAlignment="Center"/>
-                    </StackPanel>
+
+                    <Button Grid.Row="2" Content="_" Width="28" Height="28" Padding="0" MinHeight="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            Background="Transparent" BorderThickness="1" BorderBrush="#2B3038"
+                            Foreground="#888" FontWeight="Bold" HorizontalAlignment="Left"
+                            Click="MinimizeButton_Click"/>
                 </Grid>
             </Border>
 
             <!-- Content -->
-            <StackPanel Grid.Row="1" Margin="15">
+            <ScrollViewer Grid.Column="1" Margin="14,10,14,14" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
 
                 <!-- Shared: update banner -->
                 <TextBlock x:Name="UpdateBanner" Text="Nueva version disponible" Foreground="#FF7550" FontSize="11"
                            FontWeight="Bold" TextAlignment="Center" Margin="0,0,0,8"
                            Cursor="Hand" IsVisible="False" PointerReleased="UpdateBanner_PointerReleased"/>
 
-                <!-- Shared: server + gold on one row -->
+                <!-- Shared: centered server selector + gold -->
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Servidor:" Foreground="#555" FontSize="9" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <Button x:Name="RegionNABtn" Content="NA" Width="36" Height="18" FontSize="9" FontWeight="Bold"
-                                Padding="4,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="Servidor:" Foreground="#66717F" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Button x:Name="RegionNABtn" Width="62" Height="26" FontSize="10" FontWeight="Bold"
+                                Padding="6,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="#666" BorderThickness="1" BorderBrush="#333"
-                                Margin="0,0,3,0" Click="RegionNA_Click"/>
-                        <Button x:Name="RegionEUBtn" Content="EU" Width="36" Height="18" FontSize="9" FontWeight="Bold"
-                                Padding="4,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Margin="0,0,5,0" Click="RegionNA_Click" ToolTip.Tip="Servidor Americas">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Border Width="16" Height="11" CornerRadius="1" ClipToBounds="True" VerticalAlignment="Center">
+                                    <Canvas Width="16" Height="11">
+                                        <Rectangle Width="16" Height="11" Fill="#FFFFFF"/>
+                                        <Rectangle Canvas.Top="0" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Canvas.Top="2" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Canvas.Top="4" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Canvas.Top="6" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Canvas.Top="8" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Canvas.Top="10" Width="16" Height="1" Fill="#D44A4A"/>
+                                        <Rectangle Width="7" Height="6" Fill="#244A86"/>
+                                        <Ellipse Canvas.Left="1.2" Canvas.Top="1.1" Width="1" Height="1" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="3.2" Canvas.Top="1.1" Width="1" Height="1" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="5.2" Canvas.Top="1.1" Width="1" Height="1" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="2.2" Canvas.Top="3.1" Width="1" Height="1" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="4.2" Canvas.Top="3.1" Width="1" Height="1" Fill="#FFFFFF"/>
+                                    </Canvas>
+                                </Border>
+                                <TextBlock Text="NA" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="RegionEUBtn" Width="62" Height="26" FontSize="10" FontWeight="Bold"
+                                Padding="6,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="#FF7550" Foreground="White" BorderThickness="1" BorderBrush="#FF7550"
-                                Margin="0,0,3,0" Click="RegionEU_Click"/>
-                        <Button x:Name="RegionASBtn" Content="AS" Width="36" Height="18" FontSize="9" FontWeight="Bold"
-                                Padding="4,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Margin="0,0,5,0" Click="RegionEU_Click" ToolTip.Tip="Servidor Europa">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Border Width="16" Height="11" CornerRadius="1" ClipToBounds="True" VerticalAlignment="Center">
+                                    <Canvas Width="16" Height="11">
+                                        <Rectangle Width="16" Height="11" Fill="#244A9B"/>
+                                        <Ellipse Canvas.Left="7.2" Canvas.Top="1.5" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="9.6" Canvas.Top="2.5" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="10.7" Canvas.Top="4.9" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="9.6" Canvas.Top="7.3" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="7.2" Canvas.Top="8.3" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="4.8" Canvas.Top="7.3" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="3.7" Canvas.Top="4.9" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                        <Ellipse Canvas.Left="4.8" Canvas.Top="2.5" Width="1.2" Height="1.2" Fill="#FFD447"/>
+                                    </Canvas>
+                                </Border>
+                                <TextBlock Text="EU" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="RegionASBtn" Width="62" Height="26" FontSize="10" FontWeight="Bold"
+                                Padding="6,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="#666" BorderThickness="1" BorderBrush="#333"
-                                Click="RegionAS_Click"/>
+                                Click="RegionAS_Click" ToolTip.Tip="Servidor Asia">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Border Width="16" Height="11" CornerRadius="1" ClipToBounds="True" VerticalAlignment="Center">
+                                    <Canvas Width="16" Height="11">
+                                        <Rectangle Width="16" Height="11" Fill="#FFFFFF"/>
+                                        <Rectangle Width="16" Height="5.5" Fill="#D93F45"/>
+                                        <Ellipse Canvas.Left="2" Canvas.Top="1.2" Width="3.2" Height="3.2" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="2.9" Canvas.Top="1.2" Width="3.2" Height="3.2" Fill="#D93F45"/>
+                                        <Ellipse Canvas.Left="6.1" Canvas.Top="1.2" Width="0.8" Height="0.8" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="7.2" Canvas.Top="2.1" Width="0.8" Height="0.8" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="6.8" Canvas.Top="3.4" Width="0.8" Height="0.8" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="5.4" Canvas.Top="3.4" Width="0.8" Height="0.8" Fill="#FFFFFF"/>
+                                        <Ellipse Canvas.Left="5.0" Canvas.Top="2.1" Width="0.8" Height="0.8" Fill="#FFFFFF"/>
+                                    </Canvas>
+                                </Border>
+                                <TextBlock Text="AS" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
-                    <StackPanel x:Name="GoldPriceRow" Grid.Column="1" Orientation="Horizontal"
-                                VerticalAlignment="Center" IsVisible="False">
+                    <StackPanel x:Name="GoldPriceRow" Grid.Column="2" Orientation="Horizontal"
+                                VerticalAlignment="Center" HorizontalAlignment="Right" IsVisible="False">
                         <TextBlock Text="&#x2B21; " Foreground="#FFD700" FontSize="9" VerticalAlignment="Center"/>
                         <TextBlock x:Name="GoldPriceText" Foreground="#FFD700" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
                         <TextBlock Text=" s/oro" Foreground="#555" FontSize="8" VerticalAlignment="Center"/>
@@ -102,20 +238,28 @@
 
                 <!-- ═══════════════════ PRICE MODE ═══════════════════ -->
                 <StackPanel x:Name="PriceModeContent">
-                    <Grid Margin="0,0,0,8">
+                    <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="ItemInput" Background="#1A1A1A" Foreground="White" BorderBrush="#444"
-                                 FontSize="12" Padding="8,6" Watermark="Nombre del item..."
+                                 FontSize="12" Padding="8,5" Watermark="Nombre del item..."
+                                 TextChanged="ItemInput_TextChanged"
                                  KeyDown="ItemInput_KeyDown"/>
                         <Button Grid.Column="1" Content="Check" Background="#FF7550" Foreground="White"
-                                BorderThickness="0" Padding="15,6" Margin="5,0,0,0" Click="CheckButton_Click"/>
+                                BorderThickness="0" Padding="14,5" Margin="5,0,0,0" Click="CheckButton_Click"/>
                     </Grid>
 
+                    <!-- Fast item suggestions -->
+                    <Border x:Name="SearchSuggestionsPanel" IsVisible="False" Background="#141416"
+                            BorderBrush="#333" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8"
+                            Padding="3">
+                        <StackPanel x:Name="SearchSuggestionRows"/>
+                    </Border>
+
                     <!-- Recent searches -->
-                    <StackPanel x:Name="RecentSearchesSection" IsVisible="False" Margin="0,0,0,8">
+                    <StackPanel x:Name="RecentSearchesSection" IsVisible="False" Margin="0,0,0,5">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="RECIENTES" Foreground="#555" FontSize="8" FontWeight="Bold"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -127,7 +271,7 @@
                     </StackPanel>
 
                     <!-- Favorites -->
-                    <StackPanel x:Name="FavoritesSection" IsVisible="False" Margin="0,0,0,8">
+                    <StackPanel x:Name="FavoritesSection" IsVisible="False" Margin="0,0,0,6">
                         <TextBlock Text="FAVORITOS" Foreground="#FFD700" FontSize="8" FontWeight="Bold" Margin="0,0,0,4"/>
                         <WrapPanel x:Name="FavoriteChips"/>
                     </StackPanel>
@@ -135,10 +279,11 @@
                     <TextBlock x:Name="StatusText" Text="Escribi el nombre del item" Foreground="#AAA" FontSize="11" TextAlignment="Center" Margin="0,0,0,5"/>
                     <TextBlock x:Name="DebugText" Text="" Foreground="#555" FontSize="9" TextAlignment="Center" Margin="0,2" IsVisible="False"/>
 
-                    <StackPanel x:Name="ItemInfoPanel" IsVisible="False">
+                    <Grid x:Name="ItemInfoPanel" IsVisible="False" ColumnDefinitions="0.92*,14,1.08*">
+                    <StackPanel Grid.Column="0">
 
                         <!-- Item header: icon + name/id + favorite star + watchlist + -->
-                        <Grid Margin="0,0,0,10">
+                        <Grid Margin="0,0,0,7">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -166,7 +311,7 @@
                         </Grid>
 
                         <!-- Tier / Enchantment selectors -->
-                        <StackPanel x:Name="TierEnchantPanel" IsVisible="False" Margin="0,0,0,6">
+                        <StackPanel x:Name="TierEnchantPanel" IsVisible="False" Margin="0,0,0,4">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Tier" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
                                 <WrapPanel x:Name="TierButtonsPanel"/>
@@ -178,7 +323,7 @@
                         </StackPanel>
 
                         <!-- Quality selector -->
-                        <StackPanel x:Name="QualityPanel" IsVisible="False" Margin="0,0,0,6">
+                        <StackPanel x:Name="QualityPanel" IsVisible="False" Margin="0,0,0,5">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Estado" Foreground="#666" FontSize="10" VerticalAlignment="Center" Width="44"/>
                                 <WrapPanel x:Name="QualityButtonsPanel"/>
@@ -188,6 +333,139 @@
                                         Click="CompareQualities_Click"/>
                             </StackPanel>
                         </StackPanel>
+
+                        <Border Background="#101317" BorderBrush="#252A31" BorderThickness="1"
+                                CornerRadius="5" Padding="4" Margin="0,0,0,7" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="PriceTabBtn" Content="Precios" Width="82" Height="26"
+                                        FontSize="10" FontWeight="Bold" Padding="8,0" MinHeight="0"
+                                        Background="#FF7550" Foreground="White" BorderThickness="0" Margin="0,0,4,0"
+                                        Click="PriceInfoTab_Click"/>
+                                <Button x:Name="StatsTabBtn" Content="Stats" Width="82" Height="26"
+                                        FontSize="10" Padding="8,0" MinHeight="0"
+                                        Background="Transparent" Foreground="#9AA6B2" BorderThickness="0" Margin="0,0,4,0"
+                                        Click="PriceInfoTab_Click"/>
+                                <Button x:Name="CraftingTabBtn" Content="Crafting" Width="82" Height="26"
+                                        FontSize="10" Padding="8,0" MinHeight="0"
+                                        Background="Transparent" Foreground="#9AA6B2" BorderThickness="0"
+                                        Click="PriceInfoTab_Click"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Item stats -->
+                        <Border x:Name="StatsPanel" IsVisible="False"
+                                Background="#141820" BorderBrush="#273142" BorderThickness="1"
+                                CornerRadius="4" Padding="8,6" Margin="0,0,0,5">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="STATS" Foreground="#7FB7FF" FontWeight="Bold" FontSize="8"/>
+                                        <TextBlock x:Name="StatsSubtitleText" Foreground="#9AA6B2" FontSize="9"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" x:Name="StatsExternalBtn" Content="Ficha"
+                                            Height="20" Padding="8,0" MinHeight="0"
+                                            FontSize="8" Background="Transparent" Foreground="#7FB7FF"
+                                            BorderThickness="1" BorderBrush="#36557A"
+                                            Click="StatsExternal_Click"/>
+                                </Grid>
+                                <ItemsControl x:Name="StatsLinesList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="82"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Label}" Foreground="#66717F" FontSize="9"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="#DDE7F3"
+                                                           FontSize="9" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl x:Name="StatsSectionsList" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,5,0,0">
+                                                <TextBlock Text="{Binding Title}" Foreground="#7FB7FF"
+                                                           FontWeight="Bold" FontSize="8" Margin="0,0,0,3"/>
+                                                <ItemsControl ItemsSource="{Binding Lines}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,1">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="82"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Label}" Foreground="#66717F" FontSize="9"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="#DDE7F3"
+                                                                           FontSize="9" FontWeight="SemiBold"
+                                                                           TextWrapping="Wrap"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="CraftingInfoPanel" IsVisible="False"
+                                Background="#101317" BorderBrush="#2E3024" BorderThickness="1"
+                                CornerRadius="4" Padding="8,6" Margin="0,0,0,5">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="CRAFTING" Foreground="#FFD700" FontWeight="Bold" FontSize="8"/>
+                                        <TextBlock Text="Receta y materiales" Foreground="#9AA6B2" FontSize="9"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Ficha"
+                                            Height="20" Padding="8,0" MinHeight="0"
+                                            FontSize="8" Background="Transparent" Foreground="#FFD700"
+                                            BorderThickness="1" BorderBrush="#6F5B22"
+                                            Click="StatsExternal_Click"/>
+                                </Grid>
+                                <TextBlock x:Name="CraftingEmptyText" Text="No hay datos de crafting para este item todavia."
+                                           Foreground="#66717F" FontSize="10" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                <ItemsControl x:Name="CraftingSectionsList" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,5,0,0">
+                                                <TextBlock Text="{Binding Title}" Foreground="#FFD700"
+                                                           FontWeight="Bold" FontSize="8" Margin="0,0,0,3"/>
+                                                <ItemsControl ItemsSource="{Binding Lines}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,1">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="82"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Label}" Foreground="#81765A" FontSize="9"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="#EFE5B0"
+                                                                           FontSize="9" FontWeight="SemiBold"
+                                                                           TextWrapping="Wrap"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Quality comparison panel -->
                         <Border x:Name="QualityComparePanel" IsVisible="False"
@@ -225,7 +503,7 @@
                         </Border>
 
                         <!-- Best buy / sell / instant side by side -->
-                        <Grid Margin="0,0,0,6">
+                        <Grid x:Name="PriceSummaryPanel" Margin="0,0,0,5">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="4"/>
@@ -233,7 +511,7 @@
                                 <ColumnDefinition Width="4"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Background="#22FFFFFF" CornerRadius="4" Padding="6,7">
+                            <Border Background="#22FFFFFF" CornerRadius="4" Padding="6,5">
                                 <StackPanel>
                                     <TextBlock Text="MEJOR COMPRA" Foreground="#4CAF50" FontWeight="Bold" FontSize="8" Margin="0,0,0,1"/>
                                     <TextBlock Text="venta más baja" Foreground="#4CAF50" FontSize="7" Opacity="0.55" Margin="0,0,0,2"/>
@@ -242,7 +520,7 @@
                                     <TextBlock x:Name="BestBuyVolumeText" Text="" Foreground="#4CAF50" FontSize="8" Opacity="0.6"/>
                                 </StackPanel>
                             </Border>
-                            <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="4" Padding="6,7">
+                            <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="4" Padding="6,5">
                                 <StackPanel>
                                     <TextBlock Text="MEJOR VENTA" Foreground="#FF5722" FontWeight="Bold" FontSize="8" Margin="0,0,0,1"/>
                                     <TextBlock Text="venta más alta" Foreground="#FF5722" FontSize="7" Opacity="0.55" Margin="0,0,0,2"/>
@@ -251,7 +529,7 @@
                                     <TextBlock x:Name="BestSellVolumeText" Text="" Foreground="#FF5722" FontSize="8" Opacity="0.6"/>
                                 </StackPanel>
                             </Border>
-                            <Border Grid.Column="4" Background="#22FFFFFF" CornerRadius="4" Padding="6,7">
+                            <Border Grid.Column="4" Background="#22FFFFFF" CornerRadius="4" Padding="6,5">
                                 <StackPanel>
                                     <TextBlock Text="VENTA RÁPIDA" Foreground="#FFD700" FontWeight="Bold" FontSize="8" Margin="0,0,0,1"/>
                                     <TextBlock Text="compra más alta" Foreground="#FFD700" FontSize="7" Opacity="0.55" Margin="0,0,0,2"/>
@@ -264,7 +542,7 @@
 
                         <!-- Flip calculator -->
                         <Border x:Name="FlipCalcPanel" IsVisible="False"
-                                Background="#1AFFD700" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                                Background="#1AFFD700" CornerRadius="4" Padding="8,6" Margin="0,0,0,5">
                             <StackPanel>
                                 <TextBlock Text="FLIP OPTIMO" Foreground="#FFD700" FontWeight="Bold" FontSize="10" Margin="0,0,0,3"/>
                                 <TextBlock x:Name="FlipRouteText" Foreground="#AAA" FontSize="10" Margin="0,0,0,2"/>
@@ -277,12 +555,19 @@
                         </Border>
 
                         <!-- Price history sparkline -->
-                        <StackPanel x:Name="PriceHistoryPanel" IsVisible="False" Margin="0,0,0,8">
+                        <StackPanel x:Name="PriceHistoryPanel" IsVisible="False" Margin="0,0,0,5">
                             <TextBlock x:Name="SparklineTitleText" Text="HISTORIAL" Foreground="#555"
                                        FontSize="8" FontWeight="Bold" Margin="0,0,0,3"/>
-                            <Canvas x:Name="SparklineCanvas" Height="50" Background="#0AFFFFFF"/>
+                            <Canvas x:Name="SparklineCanvas" Height="38" Background="#0AFFFFFF"/>
                         </StackPanel>
 
+                    </StackPanel>
+
+                    <Border x:Name="MarketCityPanel" Grid.Column="2" Background="#101317" BorderBrush="#252A31"
+                            BorderThickness="1" CornerRadius="5" Padding="8,7">
+                    <StackPanel>
+                        <TextBlock Text="MERCADO POR CIUDAD" Foreground="#8894A0" FontSize="8"
+                                   FontWeight="Bold" Margin="0,0,0,5"/>
                         <!-- Cities list -->
                         <Grid Margin="0,4,0,2">
                             <Grid.ColumnDefinitions>
@@ -294,10 +579,11 @@
                             <TextBlock Grid.Column="1" Text="Ord. Venta" Foreground="#4CAF50" FontSize="8" FontWeight="Bold" Width="75" Margin="0,0,12,0"/>
                             <TextBlock Grid.Column="2" Text="Ord. Compra" Foreground="#FF7550" FontSize="8" FontWeight="Bold" Width="75"/>
                         </Grid>
+                        <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="CitiesList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,4" Margin="0,2">
+                                    <Border Background="#15FFFFFF" CornerRadius="4" Padding="8,3" Margin="0,1">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -318,34 +604,40 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        </ScrollViewer>
 
                     </StackPanel>
+                    </Border>
+                    </Grid>
 
-                    <TextBlock x:Name="ErrorText" Text="" Foreground="#FF4444" FontSize="11" TextAlignment="Center" IsVisible="False" Margin="0,10"/>
+                    <TextBlock x:Name="ErrorText" Text="" Foreground="#FF4444" FontSize="11" TextAlignment="Center" IsVisible="False" Margin="0,8"/>
                 </StackPanel>
 
                 <!-- ═══════════════════ CRAFTING MODE ═══════════════════ -->
                 <StackPanel x:Name="CraftingModeContent" IsVisible="False">
 
                     <!-- Sub-mode tabs -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <Button x:Name="CraftSubBtn"  Content="Crafteo"  Width="70" Height="19" FontSize="8" FontWeight="Bold"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="#FF7550" Foreground="White" BorderThickness="0" Margin="0,0,3,0"
+                    <Border Background="#101317" BorderBrush="#252A31" BorderThickness="1"
+                            CornerRadius="5" Padding="4" Margin="0,0,0,12">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="CraftSubBtn"  Content="Crafteo"  Width="86" Height="28" FontSize="10" FontWeight="Bold"
+                                Padding="8,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Background="#FF7550" Foreground="White" BorderThickness="0" Margin="0,0,4,0"
                                 Click="CraftSubMode_Click"/>
-                        <Button x:Name="RefineSubBtn" Content="Refinado" Width="64" Height="19" FontSize="8"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0" Margin="0,0,3,0"
+                        <Button x:Name="RefineSubBtn" Content="Refinado" Width="86" Height="28" FontSize="10"
+                                Padding="8,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#78828E" BorderThickness="0" Margin="0,0,4,0"
                                 Click="RefineSubMode_Click"/>
-                        <Button x:Name="EnchantSubBtn" Content="Encant." Width="56" Height="19" FontSize="8"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0" Margin="0,0,3,0"
+                        <Button x:Name="EnchantSubBtn" Content="Encant." Width="86" Height="28" FontSize="10"
+                                Padding="8,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#78828E" BorderThickness="0" Margin="0,0,4,0"
                                 Click="EnchantSubMode_Click"/>
-                        <Button x:Name="RouteSubBtn"  Content="Rutas"   Width="52" Height="19" FontSize="8"
-                                Padding="2,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="Transparent" Foreground="#666" BorderThickness="0"
+                        <Button x:Name="RouteSubBtn"  Content="Rutas"   Width="86" Height="28" FontSize="10"
+                                Padding="8,0" MinHeight="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Background="Transparent" Foreground="#78828E" BorderThickness="0"
                                 Click="RouteSubMode_Click"/>
                     </StackPanel>
+                    </Border>
 
                     <!-- ── CRAFTEO ── -->
                     <StackPanel x:Name="CraftSubPanel">
@@ -666,7 +958,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="WATCHLIST" Foreground="#FF7550" FontSize="10"
+                        <TextBlock Text="WATCHLIST" Foreground="#FF7550" FontSize="14"
                                    FontWeight="Bold" VerticalAlignment="Center"/>
                         <TextBlock Grid.Column="1" x:Name="WatchCountdownText" Foreground="#555"
                                    FontSize="9" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -690,6 +982,7 @@
 
                 <!-- ═══════════════════ PLAYER MODE ═══════════════════ -->
                 <StackPanel x:Name="PlayerModeContent" IsVisible="False">
+                    <TextBlock Text="JUGADOR" Foreground="#FF7550" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
                     <TextBlock Text="Nombre del jugador:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
@@ -895,7 +1188,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="OPORTUNIDADES DE FLIP" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="OPORTUNIDADES DE FLIP" Foreground="#FF7550" FontSize="14" FontWeight="Bold"/>
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock x:Name="FlipLastScanText" Text="Sin escanear" Foreground="#555" FontSize="8" VerticalAlignment="Center"/>
                                 <Button Content="[catálogo]" Padding="0" Height="12"
@@ -961,7 +1254,7 @@
                                TextAlignment="Center" Margin="0,0,0,6" IsVisible="False"/>
 
                     <!-- Results list -->
-                    <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer MaxHeight="520" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="FlipList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -1111,7 +1404,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="GUÍA DE ISLAS" Foreground="#FF7550" FontSize="10"
+                        <TextBlock Text="GUÍA DE ISLAS" Foreground="#FF7550" FontSize="14"
                                    FontWeight="Bold" VerticalAlignment="Center"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <Button x:Name="IslandFetchPricesBtn" Content="Ver precios" Height="22" FontSize="9"
@@ -1160,8 +1453,8 @@
                     </StackPanel>
 
                 </StackPanel>
-
             </StackPanel>
+            </ScrollViewer>
         </Grid>
     </Border>
 </Window>
