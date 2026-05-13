@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _playerCts;
     private CancellationTokenSource? _setValueCts;
+    private CancellationTokenSource? _statsCts;
 
     private string? _baseId;
     private int  _currentTier;
@@ -36,6 +37,11 @@ public partial class MainWindow : Window
     private Dictionary<int, List<int>> _variants = new();
     private string? _currentItemId;
     private string? _currentItemName;
+    private string? _currentStatsUrl;
+    private readonly List<SearchSuggestion> _activeSuggestions = new();
+    private int _selectedSuggestionIndex = -1;
+    private bool _suppressSuggestionRefresh;
+    private string _priceInfoTab = "prices";
 
     private List<PriceHistoryPoint>? _sparklineData;
     private Size _lastSparklineBounds;
@@ -238,6 +244,7 @@ public partial class MainWindow : Window
         _watchTimer?.Stop();
         _scanTimer?.Stop();
         _scanCts?.Cancel();
+        _statsCts?.Cancel();
     }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
@@ -251,25 +258,58 @@ public partial class MainWindow : Window
         Hide();
     }
 
-    internal void ShowCentered()
+    internal void ShowCentered(bool focusSearch = true)
     {
-        if (IsVisible && IsLoaded) { Activate(); Focus(); return; }
-        var screen = Screens.Primary;
-        if (screen != null)
+        ApplyOverlaySize();
+        CenterOnPrimaryScreen();
+
+        if (IsVisible && IsLoaded)
         {
-            var wa = screen.WorkingArea;
-            var s  = screen.Scaling;
-            Position = new PixelPoint(
-                wa.X + (int)((wa.Width  - ClientSize.Width  * s) / 2),
-                wa.Y + (int)((wa.Height - ClientSize.Height * s) / 2));
+            Activate();
+            Focus();
+            if (focusSearch)
+            {
+                ItemInput.Focus();
+                ItemInput.SelectAll();
+            }
+            return;
         }
+
         Show(); Activate(); Focus();
+        if (focusSearch)
+        {
+            ItemInput.Focus();
+            ItemInput.SelectAll();
+        }
+    }
+
+    private void ApplyOverlaySize()
+    {
+        var screen = Screens.Primary;
+        if (screen == null) return;
+
+        var wa = screen.WorkingArea;
+        var s  = screen.Scaling;
+        Width  = Math.Max(760, Math.Round(wa.Width  / s * 0.80));
+        Height = Math.Max(520, Math.Round(wa.Height / s * 0.80));
+    }
+
+    private void CenterOnPrimaryScreen()
+    {
+        var screen = Screens.Primary;
+        if (screen == null) return;
+
+        var wa = screen.WorkingArea;
+        var s  = screen.Scaling;
+        Position = new PixelPoint(
+            wa.X + (int)((wa.Width  - Width  * s) / 2),
+            wa.Y + (int)((wa.Height - Height * s) / 2));
     }
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
     {
         _hideTimer?.Stop();
-        Dispatcher.UIThread.InvokeAsync(ShowCentered);
+        Dispatcher.UIThread.InvokeAsync(() => ShowCentered());
     }
 
     // ── Mode toggle ──────────────────────────────────────────────────────────
@@ -286,15 +326,17 @@ public partial class MainWindow : Window
         foreach (var btn in _modeBtns ?? [])
         {
             btn.Background = Brushes.Transparent;
-            btn.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+            btn.Foreground = new SolidColorBrush(Color.FromRgb(122, 130, 144));
+            btn.BorderBrush = Brushes.Transparent;
+            btn.FontWeight = FontWeight.Normal;
         }
-        activeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
+        activeBtn.Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0x75, 0x50));
         activeBtn.Foreground = Brushes.White;
+        activeBtn.BorderBrush = new SolidColorBrush(Color.FromRgb(255, 117, 80));
+        activeBtn.FontWeight = FontWeight.Bold;
 
-        if (active == IslandModeContent)
-            UpdateIslandWindowWidth();
-        else
-            this.Width = 430;
+        ApplyOverlaySize();
+        CenterOnPrimaryScreen();
     }
 
     private void SetActiveCalcSub(StackPanel active, Button activeBtn)
@@ -306,10 +348,12 @@ public partial class MainWindow : Window
         foreach (var btn in _calcSubBtns ?? [])
         {
             btn.Background = Brushes.Transparent;
-            btn.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+            btn.Foreground = new SolidColorBrush(Color.FromRgb(120, 130, 142));
+            btn.FontWeight = FontWeight.Normal;
         }
         activeBtn.Background = new SolidColorBrush(Color.FromRgb(255, 117, 80));
         activeBtn.Foreground = Brushes.White;
+        activeBtn.FontWeight = FontWeight.Bold;
         ForceResizeWindow();
     }
 
@@ -396,7 +440,7 @@ public partial class MainWindow : Window
 
         SetActiveMode(PriceModeContent, PriceModeBtn);
         (Application.Current as App)?.RealtimeService?.SetItem(null);
-        _ = CheckItemById(opp.ItemId, opp.ItemName, opp.Quality);
+        _ = CheckItemById(opp.ItemId, opp.ItemName, opp.Quality, updateSearchText: false, focusSearch: false);
     }
 
     // ── Flip scanner ─────────────────────────────────────────────────────────
@@ -848,6 +892,169 @@ public partial class MainWindow : Window
         FavoritesSection.IsVisible = hist.Favorites.Count > 0;
     }
 
+    private void RefreshSearchSuggestions()
+    {
+        if (_suppressSuggestionRefresh || !_dbLoaded || _itemDatabase.ItemCount == 0)
+        {
+            HideSearchSuggestions();
+            return;
+        }
+
+        var query = ItemInput.Text ?? "";
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            HideSearchSuggestions();
+            return;
+        }
+
+        var normalizedQuery = NormalizeForSearch(query);
+        if (normalizedQuery.Length < 2)
+        {
+            HideSearchSuggestions();
+            return;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var suggestions = new List<SearchSuggestion>();
+        var hist = (Application.Current as App)?.HistoryService;
+
+        void AddHistoryMatches(IEnumerable<HistoryEntry> entries, string badge, bool starred)
+        {
+            foreach (var entry in entries)
+            {
+                var name = NormalizeForSearch(entry.ItemName);
+                var id = NormalizeForSearch(entry.ItemId);
+                if (!name.Contains(normalizedQuery) && !id.Contains(normalizedQuery)) continue;
+                if (!seen.Add(entry.ItemId)) continue;
+                suggestions.Add(new SearchSuggestion(entry.ItemId, entry.ItemName, badge, starred));
+                if (suggestions.Count >= 6) return;
+            }
+        }
+
+        if (hist != null)
+        {
+            AddHistoryMatches(hist.Favorites, "Favorito", starred: true);
+            AddHistoryMatches(hist.RecentItems, "Reciente", starred: false);
+        }
+
+        foreach (var result in _itemDatabase.SearchDetailed(query, 8))
+        {
+            if (!seen.Add(result.ItemId)) continue;
+            var badge = IsTieredItemId(result.ItemId)
+                ? "Elegir tier y encantamiento"
+                : result.EnglishName != null && result.EnglishName != result.Name
+                    ? result.EnglishName
+                    : result.ItemId;
+            suggestions.Add(new SearchSuggestion(result.ItemId, result.Name, badge, Starred: false));
+            if (suggestions.Count >= 8) break;
+        }
+
+        _activeSuggestions.Clear();
+        _activeSuggestions.AddRange(suggestions);
+        _selectedSuggestionIndex = _activeSuggestions.Count > 0 ? 0 : -1;
+        RebuildSearchSuggestionRows();
+    }
+
+    private void RebuildSearchSuggestionRows()
+    {
+        SearchSuggestionRows.Children.Clear();
+        SearchSuggestionsPanel.IsVisible = _activeSuggestions.Count > 0;
+        if (_activeSuggestions.Count == 0) return;
+
+        for (var i = 0; i < _activeSuggestions.Count; i++)
+        {
+            var index = i;
+            var item = _activeSuggestions[i];
+            SearchSuggestionRows.Children.Add(MakeSuggestionButton(item, i == _selectedSuggestionIndex, async () =>
+            {
+                await ActivateSearchSuggestion(index);
+            }));
+        }
+    }
+
+    private static Button MakeSuggestionButton(SearchSuggestion item, bool selected, Func<Task> onClick)
+    {
+        var title = new TextBlock
+        {
+            Text = item.Starred ? $"* {item.ItemName}" : item.ItemName,
+            Foreground = Brushes.White,
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var badge = new TextBlock
+        {
+            Text = item.Badge,
+            Foreground = item.Starred
+                ? new SolidColorBrush(Color.FromRgb(255, 215, 0))
+                : new SolidColorBrush(Color.FromRgb(135, 135, 140)),
+            FontSize = 8,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var content = new StackPanel { Spacing = 1 };
+        content.Children.Add(title);
+        content.Children.Add(badge);
+
+        var btn = new Button
+        {
+            Content = content,
+            Padding = new Thickness(8, 5),
+            MinHeight = 0,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            Background = selected
+                ? new SolidColorBrush(Color.FromRgb(45, 38, 36))
+                : Brushes.Transparent,
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(1),
+            BorderBrush = selected
+                ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
+                : Brushes.Transparent,
+        };
+        btn.Click += async (_, _) => await onClick();
+        return btn;
+    }
+
+    private async Task ActivateSearchSuggestion(int index)
+    {
+        if (index < 0 || index >= _activeSuggestions.Count) return;
+        var suggestion = _activeSuggestions[index];
+        _suppressSuggestionRefresh = true;
+        ItemInput.Text = suggestion.ItemName;
+        _suppressSuggestionRefresh = false;
+        HideSearchSuggestions();
+        await CheckItemById(suggestion.ItemId, suggestion.ItemName);
+    }
+
+    private void HideSearchSuggestions()
+    {
+        _activeSuggestions.Clear();
+        _selectedSuggestionIndex = -1;
+        SearchSuggestionRows.Children.Clear();
+        SearchSuggestionsPanel.IsVisible = false;
+    }
+
+    private static string NormalizeForSearch(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var formD = text.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(formD.Length);
+        foreach (var c in formD)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) !=
+                System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+
+        return sb.ToString()
+            .Replace("'", "").Replace(".", "").Replace(",", "")
+            .Replace("(", "").Replace(")", "").Replace("-", " ").Replace("_", " ")
+            .ToLowerInvariant()
+            .Trim();
+    }
+
+    private static bool IsTieredItemId(string itemId) =>
+        itemId.Length >= 3 && itemId[0] == 'T' && char.IsDigit(itemId[1]) && itemId[2] == '_';
+
     private static Button MakeChip(string label, Func<Task> onClick, bool starred = false)
     {
         var btn = new Button
@@ -920,6 +1127,7 @@ public partial class MainWindow : Window
         StatusText.IsVisible    = false;
         ItemInfoPanel.IsVisible       = true;
         QualityComparePanel.IsVisible = false;
+        SelectPriceInfoTab("prices");
         ForceResizeWindow();
 
         ItemNameText.Text = summary.ItemName;
@@ -938,6 +1146,7 @@ public partial class MainWindow : Window
             SetupTierEnchant(summary.ItemId);
             SetupQualityButtons(summary.ItemId);
         }
+        DisplayItemStats(summary.ItemId, summary.ItemName);
 
         var bestBuy = summary.BestBuyCity;
         if (bestBuy != null)
@@ -981,6 +1190,113 @@ public partial class MainWindow : Window
 
         DisplayFlipCalculator(summary);
         (Application.Current as App)?.RealtimeService?.SetItem(summary.ItemId);
+    }
+
+    private void PriceInfoTab_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender == PriceTabBtn) SelectPriceInfoTab("prices");
+        else if (sender == StatsTabBtn) SelectPriceInfoTab("stats");
+        else if (sender == CraftingTabBtn) SelectPriceInfoTab("crafting");
+    }
+
+    private void SelectPriceInfoTab(string tab)
+    {
+        _priceInfoTab = tab;
+        var showPrices = tab == "prices";
+        var showStats = tab == "stats";
+        var showCrafting = tab == "crafting";
+
+        PriceSummaryPanel.IsVisible = showPrices;
+        FlipCalcPanel.IsVisible = showPrices && !string.IsNullOrWhiteSpace(FlipProfitText.Text);
+        PriceHistoryPanel.IsVisible = showPrices && _sparklineData is { Count: > 0 };
+        MarketCityPanel.IsVisible = showPrices;
+        QualityComparePanel.IsVisible = showPrices && QualityComparePanel.IsVisible;
+
+        StatsPanel.IsVisible = showStats;
+        CraftingInfoPanel.IsVisible = showCrafting;
+
+        StylePriceInfoTab(PriceTabBtn, showPrices);
+        StylePriceInfoTab(StatsTabBtn, showStats);
+        StylePriceInfoTab(CraftingTabBtn, showCrafting);
+    }
+
+    private static void StylePriceInfoTab(Button button, bool selected)
+    {
+        button.Background = selected
+            ? new SolidColorBrush(Color.FromRgb(255, 117, 80))
+            : Brushes.Transparent;
+        button.Foreground = selected
+            ? Brushes.White
+            : new SolidColorBrush(Color.FromRgb(154, 166, 178));
+        button.FontWeight = selected ? FontWeight.Bold : FontWeight.Normal;
+    }
+
+    private void DisplayItemStats(string itemId, string itemName)
+    {
+        _statsCts?.Cancel();
+        _statsCts = new CancellationTokenSource();
+
+        var externalName = _itemDatabase.GetEnglishNameById(itemId) ?? itemName;
+        var stats = ItemStatsService.BuildSummary(itemId, externalName, _currentQuality);
+        _currentStatsUrl = stats.ExternalUrl;
+
+        StatsSubtitleText.Text = $"{stats.Category} · {stats.Slot} · {stats.ItemPowerLabel}";
+        StatsLinesList.ItemsSource = stats.Lines;
+        BindStatsSections(stats.Sections);
+        StatsExternalBtn.IsVisible = !string.IsNullOrWhiteSpace(stats.ExternalUrl);
+        StatsPanel.IsVisible = _priceInfoTab == "stats";
+        CraftingInfoPanel.IsVisible = _priceInfoTab == "crafting";
+
+        _ = EnrichItemStatsAsync(itemId, stats, _statsCts.Token);
+    }
+
+    private async Task EnrichItemStatsAsync(string itemId, ItemStatsSummary baseStats, CancellationToken ct)
+    {
+        var enriched = await ItemStatsService.EnrichFromAlbionDatabaseAsync(baseStats, ct);
+        if (enriched == null || ct.IsCancellationRequested || _currentItemId != itemId) return;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (_currentItemId != itemId) return;
+            _currentStatsUrl = enriched.ExternalUrl;
+            StatsSubtitleText.Text = $"{enriched.Category} · {enriched.Slot} · {enriched.ItemPowerLabel}";
+            StatsLinesList.ItemsSource = enriched.Lines;
+            BindStatsSections(enriched.Sections);
+            StatsExternalBtn.IsVisible = !string.IsNullOrWhiteSpace(enriched.ExternalUrl);
+        });
+    }
+
+    private void BindStatsSections(IEnumerable<ItemStatSection> sections)
+    {
+        var sectionList = sections.ToList();
+        var craftingSections = sectionList
+            .Where(s => IsCraftingSection(s.Title))
+            .ToList();
+        var statSections = sectionList
+            .Where(s => !IsCraftingSection(s.Title))
+            .ToList();
+
+        StatsSectionsList.ItemsSource = statSections;
+        CraftingSectionsList.ItemsSource = craftingSections;
+        CraftingEmptyText.IsVisible = craftingSections.Count == 0;
+    }
+
+    private static bool IsCraftingSection(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return false;
+        return title.Contains("craft", StringComparison.OrdinalIgnoreCase)
+               || title.Contains("receta", StringComparison.OrdinalIgnoreCase)
+               || title.Contains("material", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void StatsExternal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentStatsUrl)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(_currentStatsUrl) { UseShellExecute = true });
+        }
+        catch { }
     }
 
     // ── Quality comparison ───────────────────────────────────────────────────
@@ -1036,6 +1352,7 @@ public partial class MainWindow : Window
         if (buyCity == null || sellCity == null || buyCity.BuyAt <= 0 || sellCity.BuyAt <= 0
             || buyCity.City == sellCity.City)
         {
+            FlipProfitText.Text = "";
             FlipCalcPanel.IsVisible = false;
             return;
         }
@@ -1043,6 +1360,7 @@ public partial class MainWindow : Window
         var profit = sellCity.BuyAt * 0.92 - buyCity.BuyAt;
         if (profit <= 0 || profit / buyCity.BuyAt < 0.02)
         {
+            FlipProfitText.Text = "";
             FlipCalcPanel.IsVisible = false;
             return;
         }
@@ -1051,7 +1369,7 @@ public partial class MainWindow : Window
         FlipRouteText.Text  = $"{buyCity.City}  →  {sellCity.City}";
         FlipProfitText.Text = $"+{profit:N0}";
         FlipMarginText.Text = $"Margen: {margin:F1}%  (comprás {buyCity.BuyAt:N0}, vendés {sellCity.BuyAt:N0}, tax 8%)";
-        FlipCalcPanel.IsVisible = true;
+        FlipCalcPanel.IsVisible = _priceInfoTab == "prices";
     }
 
     // ── Price history sparkline ───────────────────────────────────────────────
@@ -1078,7 +1396,7 @@ public partial class MainWindow : Window
         {
             SparklineTitleText.Text       = $"HISTORIAL 14 DÍAS — {best.City}";
             _sparklineData                = points;
-            PriceHistoryPanel.IsVisible   = true;
+            PriceHistoryPanel.IsVisible   = _priceInfoTab == "prices";
             DrawSparkline(points);
         });
     }
@@ -1719,13 +2037,11 @@ public partial class MainWindow : Window
 
     private void ForceResizeWindow()
     {
-        // Two nested Posts: the outer one fixes the current size (Manual), which lets
-        // the layout pass between the two posts process the IsVisible changes; the inner
-        // one re-enables Height so Avalonia re-measures with the new content.
         Dispatcher.UIThread.Post(() =>
         {
             SizeToContent = SizeToContent.Manual;
-            Dispatcher.UIThread.Post(() => SizeToContent = SizeToContent.Height);
+            ApplyOverlaySize();
+            InvalidateMeasure();
         });
     }
 
@@ -1780,13 +2096,54 @@ public partial class MainWindow : Window
     private async void CheckButton_Click(object? sender, RoutedEventArgs e) =>
         await CheckItem(ItemInput.Text ?? "");
 
+    private void ItemInput_TextChanged(object? sender, Avalonia.Controls.TextChangedEventArgs e) =>
+        RefreshSearchSuggestions();
+
     private async void ItemInput_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Down && _activeSuggestions.Count > 0)
+        {
+            _selectedSuggestionIndex = Math.Min(_selectedSuggestionIndex + 1, _activeSuggestions.Count - 1);
+            RebuildSearchSuggestionRows();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Up && _activeSuggestions.Count > 0)
+        {
+            _selectedSuggestionIndex = Math.Max(_selectedSuggestionIndex - 1, 0);
+            RebuildSearchSuggestionRows();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            HideSearchSuggestions();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Return || e.Key == Key.Enter)
+        {
+            if (_selectedSuggestionIndex >= 0 && _activeSuggestions.Count > 0)
+            {
+                await ActivateSearchSuggestion(_selectedSuggestionIndex);
+                e.Handled = true;
+                return;
+            }
+
+            HideSearchSuggestions();
             await CheckItem(ItemInput.Text ?? "");
+        }
     }
 
-    private async Task CheckItemById(string itemId, string itemName, int quality = 1)
+    private async Task CheckItemById(
+        string itemId,
+        string itemName,
+        int quality = 1,
+        bool updateSearchText = true,
+        bool focusSearch = true)
     {
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
@@ -1794,7 +2151,13 @@ public partial class MainWindow : Window
 
         try
         {
-            ItemInput.Text          = itemName;
+            HideSearchSuggestions();
+            if (updateSearchText)
+            {
+                _suppressSuggestionRefresh = true;
+                ItemInput.Text = itemName;
+                _suppressSuggestionRefresh = false;
+            }
             StatusText.Text         = "Buscando...";
             StatusText.IsVisible    = true;
             ItemInfoPanel.IsVisible = false;
@@ -1808,11 +2171,16 @@ public partial class MainWindow : Window
             if (summary == null || summary.Prices.Count == 0)
             {
                 ShowError($"Sin precios para: {itemId}");
-                ShowCentered(); return;
+                ShowCentered(focusSearch); return;
             }
 
             summary.ItemName = _itemDatabase.GetNameById(itemId) ?? itemName;
             DisplayPriceInfo(summary);
+
+            var hist = (Application.Current as App)?.HistoryService;
+            hist?.AddToHistory(itemId, summary.ItemName);
+            RefreshHistoryUI();
+
             // SetupQualityButtons resets to 1, so restore the requested quality after
             if (quality > 1 && quality <= QualityLabels.Length)
             {
@@ -1820,10 +2188,10 @@ public partial class MainWindow : Window
                 RefreshButtonSelection(QualityButtonsPanel, QualityLabels[quality - 1]);
             }
             _ = LoadPriceHistoryAsync(itemId, quality, ct);
-            ShowCentered();
+            ShowCentered(focusSearch);
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { ShowError($"Error: {ex.Message}"); ShowCentered(); }
+        catch (Exception ex) { ShowError($"Error: {ex.Message}"); ShowCentered(focusSearch); }
         finally { _isLoading = false; }
     }
 
@@ -1838,6 +2206,7 @@ public partial class MainWindow : Window
 
         try
         {
+            HideSearchSuggestions();
             StatusText.Text       = "Buscando...";
             StatusText.IsVisible  = true;
             ItemInfoPanel.IsVisible = false;
@@ -3510,12 +3879,8 @@ public partial class MainWindow : Window
 
     private void UpdateIslandWindowWidth()
     {
-        // Card=375 + rightMargin=10 = 385 per slot.
-        // Window overhead: border(4) + contentMargin(30) + buffer(20) = 54px.
-        // Formula: cols * 385 + 54, min 430.
-        var count = Math.Max(1, _islandCards.Count);
-        var cols  = Math.Min(count, 3);
-        this.Width = Math.Max(430, cols * 385 + 54);
+        ApplyOverlaySize();
+        CenterOnPrimaryScreen();
     }
 
     private static void HighlightIslandBtn(Button[] btns, Button? active)
@@ -3545,3 +3910,4 @@ public partial class MainWindow : Window
 // Named record to replace anonymous type in DeathsList binding
 public record DeathItem(string KillerName, string KillerGuild, string TimeAgo);
 public record KillItem(string VictimId, string VictimName, string VictimGuild, string TimeAgo);
+public record SearchSuggestion(string ItemId, string ItemName, string Badge, bool Starred);

@@ -164,26 +164,44 @@ public class ItemDatabase
 
     public List<string> Search(string query)
     {
-        var results = new List<string>();
-        if (!_loaded || string.IsNullOrWhiteSpace(query)) return results;
+        return SearchDetailed(query, 10).Select(r => r.ItemId).ToList();
+    }
+
+    public List<ItemSearchMatch> SearchDetailed(string query, int limit = 10)
+    {
+        if (!_loaded || string.IsNullOrWhiteSpace(query)) return new();
 
         var needle = Normalize(query);
+        if (needle.Length == 0) return new();
 
+        var bestByFamily = new Dictionary<string, ItemSearchMatch>();
         foreach (var item in _items)
         {
+            var bestScore = ScoreName(Normalize(item.UniqueName), needle, isId: true);
             foreach (var name in item.SearchNames)
-            {
-                if (Normalize(name).Contains(needle))
-                {
-                    results.Add(item.UniqueName);
-                    break;
-                }
-            }
+                bestScore = Math.Max(bestScore, ScoreName(Normalize(name), needle));
 
-            if (results.Count >= 10) break;
+            if (bestScore <= 0) continue;
+            var match = new ItemSearchMatch(
+                item.UniqueName,
+                item.Name,
+                string.IsNullOrWhiteSpace(item.NameEn) ? null : item.NameEn,
+                bestScore);
+
+            var familyKey = GetVariantFamilyKey(item.UniqueName);
+            if (!bestByFamily.TryGetValue(familyKey, out var existing) ||
+                match.Score > existing.Score ||
+                (match.Score == existing.Score && PreferRepresentative(match.ItemId, existing.ItemId)))
+            {
+                bestByFamily[familyKey] = match;
+            }
         }
 
-        return results;
+        return bestByFamily.Values
+            .OrderByDescending(r => r.Score)
+            .ThenBy(r => r.Name.Length)
+            .Take(limit)
+            .ToList();
     }
 
     public string? GetNameById(string uniqueName)
@@ -240,7 +258,116 @@ public class ItemDatabase
             .ToLowerInvariant()
             .Trim();
     }
+
+    private static int ScoreName(string candidate, string needle, bool isId = false)
+    {
+        if (candidate.Length == 0 || needle.Length == 0) return 0;
+
+        var score = 0;
+        if (candidate == needle) score = 1000;
+        else if (candidate.StartsWith(needle)) score = 850 - Math.Min(candidate.Length - needle.Length, 200);
+        else if (candidate.Contains(needle)) score = 650 - Math.Min(candidate.IndexOf(needle, StringComparison.Ordinal), 150);
+        else
+        {
+            var subsequenceScore = ScoreSubsequence(candidate, needle);
+            if (subsequenceScore > 0) score = subsequenceScore;
+
+            if (needle.Length >= 4)
+            {
+                var distance = LevenshteinDistance(candidate, needle, maxDistance: 3);
+                if (distance >= 0)
+                    score = Math.Max(score, 520 - distance * 80 - Math.Min(candidate.Length, 120));
+            }
+        }
+
+        return isId && score > 0 ? score - 20 : score;
+    }
+
+    private static string GetVariantFamilyKey(string uniqueName)
+    {
+        var withoutEnchant = uniqueName.Split('@', 2)[0];
+        if (withoutEnchant.Length >= 3 &&
+            withoutEnchant[0] == 'T' &&
+            char.IsDigit(withoutEnchant[1]) &&
+            withoutEnchant[2] == '_')
+        {
+            return withoutEnchant[3..];
+        }
+
+        return withoutEnchant;
+    }
+
+    private static bool PreferRepresentative(string candidateId, string existingId)
+    {
+        var candidateEnchant = GetEnchantLevel(candidateId);
+        var existingEnchant  = GetEnchantLevel(existingId);
+        if (candidateEnchant != existingEnchant)
+            return candidateEnchant < existingEnchant;
+
+        var candidateTier = GetTier(candidateId);
+        var existingTier  = GetTier(existingId);
+        if (candidateTier != existingTier)
+            return candidateTier < existingTier;
+
+        return string.CompareOrdinal(candidateId, existingId) < 0;
+    }
+
+    private static int GetEnchantLevel(string uniqueName)
+    {
+        var at = uniqueName.IndexOf('@');
+        return at >= 0 && int.TryParse(uniqueName[(at + 1)..], out var enchant) ? enchant : 0;
+    }
+
+    private static int GetTier(string uniqueName) =>
+        uniqueName.Length >= 2 && uniqueName[0] == 'T' && char.IsDigit(uniqueName[1])
+            ? uniqueName[1] - '0'
+            : int.MaxValue;
+
+    private static int ScoreSubsequence(string candidate, string needle)
+    {
+        var pos = -1;
+        var gaps = 0;
+        foreach (var c in needle)
+        {
+            var next = candidate.IndexOf(c, pos + 1);
+            if (next < 0) return 0;
+            if (pos >= 0) gaps += next - pos - 1;
+            pos = next;
+        }
+
+        return Math.Max(120, 430 - gaps * 8 - candidate.Length);
+    }
+
+    private static int LevenshteinDistance(string a, string b, int maxDistance)
+    {
+        if (Math.Abs(a.Length - b.Length) > maxDistance) return -1;
+
+        var previous = new int[b.Length + 1];
+        var current  = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) previous[j] = j;
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            var rowMin = current[0];
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + cost);
+                rowMin = Math.Min(rowMin, current[j]);
+            }
+
+            if (rowMin > maxDistance) return -1;
+            (previous, current) = (current, previous);
+        }
+
+        return previous[b.Length] <= maxDistance ? previous[b.Length] : -1;
+    }
 }
+
+public record ItemSearchMatch(string ItemId, string Name, string? EnglishName, int Score);
 
 public class ItemEntry
 {
