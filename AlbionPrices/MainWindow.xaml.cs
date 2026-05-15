@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     private List<PriceHistoryPoint>? _sparklineData;
     private Size _lastSparklineBounds;
     private readonly Dictionary<string, CityPriceViewModel> _cityViewModels = new();
+    private readonly Dictionary<string, double> _combatUnitPriceCache = new(StringComparer.OrdinalIgnoreCase);
     private double _currentBestBuyPrice;
 
     private DispatcherTimer? _watchTimer;
@@ -179,6 +180,11 @@ public partial class MainWindow : Window
             _regionButtons = [RegionNABtn, RegionEUBtn, RegionASBtn];
             _modeBtns      = [PriceModeBtn, CraftingModeBtn, WatchModeBtn, PlayerModeBtn, FlipModeBtn, IslandModeBtn];
             _calcSubBtns   = [CraftSubBtn, RefineSubBtn, EnchantSubBtn, RouteSubBtn];
+            InitBuildValuationSelector();
+            OpenCatalogBtn.Click += OpenCatalog_Click;
+            KillsList.PointerReleased += KillEntry_Click;
+            DeathsList.PointerReleased += CombatEntry_Click;
+            FlipList.PointerReleased += FlipItem_Click;
             InitRefineSelectors();
             InitRoutePanel();
             InitFlipCategorySelectors();
@@ -194,9 +200,9 @@ public partial class MainWindow : Window
             await _itemDatabase.LoadAsync();
             StatusText.Text = _itemDatabase.ItemCount == 0
                 ? $"ERROR DB: {_itemDatabase.LoadError}"
-                : $"{_itemDatabase.ItemCount:N0} items cargados. Escribí el nombre del item.";
+                : $"{_itemDatabase.ItemCount:N0} items cargados. Escribi el nombre del item.";
 
-            if (!_scanCatalog.Load())
+            if (!_scanCatalog.Load() && _itemDatabase.ItemCount > 0)
             {
                 _scanCatalog.GenerateDefault(_itemDatabase);
                 _scanCatalog.Save();
@@ -410,7 +416,7 @@ public partial class MainWindow : Window
     private async void ScanNow_Click(object? sender, RoutedEventArgs e) =>
         await ScanFlipOpportunitiesAsync();
 
-    private void OpenCatalog_Click(object? sender, RoutedEventArgs e)
+    public void OpenCatalog_Click(object? sender, RoutedEventArgs e)
     {
         try
         {
@@ -420,9 +426,9 @@ public partial class MainWindow : Window
         catch { }
     }
 
-    private void FlipItem_Click(object? sender, PointerReleasedEventArgs e)
+    public void FlipItem_Click(object? sender, PointerReleasedEventArgs e)
     {
-        if ((sender as Border)?.DataContext is not FlipOpportunity opp) return;
+        if ((e.Source as Control)?.DataContext is not FlipOpportunity opp) return;
 
         _flipJournal.Add(new FlipJournalEntry
         {
@@ -1688,21 +1694,22 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var exact = players.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.Ordinal));
-            if (exact == null)
-            {
-                var ci = players.Where(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
-                exact  = ci.Count == 1 ? ci[0] : null;
-            }
+            players = players
+                .OrderByDescending(p => string.Equals(p.Name, name, StringComparison.Ordinal))
+                .ThenByDescending(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(p => (p.KillFame + p.DeathFame) + (string.IsNullOrWhiteSpace(p.GuildName) ? 0 : 1_000_000))
+                .ToList();
 
-            if (exact?.Id != null)
+            if (players.Count == 1 && players[0].Id != null)
             {
-                await LoadPlayerDetailsAsync(exact.Id, exact.Name ?? name);
+                await LoadPlayerDetailsAsync(players[0].Id!, players[0].Name ?? name);
             }
             else
             {
-                PlayerResultsList.ItemsSource  = players.Take(8).ToList();
-                PlayerResultsList.IsVisible    = true;
+                PlayerResultsList.ItemsSource = players.Take(8).ToList();
+                PlayerResultsList.IsVisible   = true;
+                PlayerStatusText.Text         = "Elegir el jugador correcto";
+                PlayerStatusText.IsVisible    = true;
             }
         }
         catch (OperationCanceledException) { }
@@ -1778,7 +1785,9 @@ public partial class MainWindow : Window
         if (lastEvent != null)
         {
             var isKiller  = string.Equals(lastEvent.Killer?.Id, player.Id, StringComparison.OrdinalIgnoreCase);
-            var equipment = isKiller ? lastEvent.Killer?.Equipment : lastEvent.Victim?.Equipment;
+            var participant = isKiller ? lastEvent.Killer : lastEvent.Victim;
+            var equipment = participant?.Equipment;
+            SetPlayerIp(participant?.AverageItemPower ?? player.AverageItemPower);
             DisplayEquipment(equipment, lastEvent.TimeStamp);
         }
         else
@@ -1803,7 +1812,8 @@ public partial class MainWindow : Window
                      && string.Equals(k.Killer?.Id, playerId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(k => k.TimeStamp)
             .Take(5)
-            .Select(k => new KillItem(
+            .Select(k => new CombatEventItem(
+                k,
                 k.Victim?.Id   ?? "",
                 k.Victim?.Name ?? "Desconocido",
                 string.IsNullOrEmpty(k.Victim?.GuildName) ? "" : $"[{k.Victim.GuildName}]",
@@ -1816,12 +1826,16 @@ public partial class MainWindow : Window
         RecentKillsPanel.IsVisible = true;
     }
 
-    private void KillEntry_Click(object? sender, PointerReleasedEventArgs e)
+    public void KillEntry_Click(object? sender, PointerReleasedEventArgs e)
     {
-        if ((sender as Border)?.DataContext is not KillItem kill) return;
-        if (string.IsNullOrEmpty(kill.VictimName)) return;
-        PlayerInput.Text = kill.VictimName;
-        _ = SearchPlayerAsync(kill.VictimName);
+        if ((e.Source as Control)?.DataContext is not CombatEventItem combat) return;
+        ShowCombatCompare(combat.Event);
+    }
+
+    public void CombatEntry_Click(object? sender, PointerReleasedEventArgs e)
+    {
+        if ((e.Source as Control)?.DataContext is not CombatEventItem combat) return;
+        ShowCombatCompare(combat.Event);
     }
 
     private void DisplayPlayerInfo(PlayerInfo player, string fallbackName,
@@ -1837,7 +1851,7 @@ public partial class MainWindow : Window
             ? "" : $"[{player.AllianceTag}] {player.AllianceName}";
         PlayerAllianceText.IsVisible = !string.IsNullOrEmpty(player.AllianceTag);
 
-        PlayerIPText.Text = player.AverageItemPower > 0 ? $"{player.AverageItemPower.Value:F0}" : "—";
+        SetPlayerIp(player.AverageItemPower);
 
         PlayerKillFameText.Text  = FormatFame(player.KillFame);
         PlayerDeathFameText.Text = FormatFame(player.DeathFame);
@@ -1855,9 +1869,42 @@ public partial class MainWindow : Window
         LastEquipPanel.IsVisible    = false;
         RecentKillsPanel.IsVisible  = false;
         RecentDeathsPanel.IsVisible = false;
+        CombatComparePanel.IsVisible = false;
     }
 
     // ── Equipment grid ────────────────────────────────────────────────────────
+
+    private void InitBuildValuationSelector()
+    {
+        var app = Application.Current as App;
+        BuildValuationCombo.SelectedIndex = app?.Settings.BuildValuationMode switch
+        {
+            BuildValuationMode.HighestBuyOrder => 1,
+            BuildValuationMode.HighestSellOrder => 2,
+            _ => 0,
+        };
+    }
+
+    private void BuildValuationCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        var app = Application.Current as App;
+        if (app == null) return;
+        app.Settings.BuildValuationMode = BuildValuationCombo.SelectedIndex switch
+        {
+            1 => BuildValuationMode.HighestBuyOrder,
+            2 => BuildValuationMode.HighestSellOrder,
+            _ => BuildValuationMode.CheapestSellOrder,
+        };
+        app.Settings.Save();
+        _combatUnitPriceCache.Clear();
+    }
+
+    private void SetPlayerIp(double? averageItemPower)
+    {
+        PlayerIPText.Text = averageItemPower.HasValue && averageItemPower.Value > 0
+            ? $"{averageItemPower.Value:F0}"
+            : "—";
+    }
 
     private void DisplayEquipment(KillEquipment? equipment, DateTime? lastSeen)
     {
@@ -1893,9 +1940,9 @@ public partial class MainWindow : Window
                 : null;
             var border = new Border
             {
-                Width           = 38, Height = 38,
-                Margin          = new Thickness(2),
-                CornerRadius    = new CornerRadius(5),
+                Width           = 74, Height = 74,
+                Margin          = new Thickness(4),
+                CornerRadius    = new CornerRadius(7),
                 Background      = new SolidColorBrush(Color.FromArgb((byte)(item?.Type != null ? 50 : 20), 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 BorderBrush     = item?.Type != null
@@ -1906,7 +1953,7 @@ public partial class MainWindow : Window
 
             if (item?.Type != null)
             {
-                var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(3) };
+                var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(5) };
                 border.Child = img;
                 _ = LoadImageFromUrlAsync(img, GameInfoService.GetItemIconUrl(item.Type));
 
@@ -1934,26 +1981,17 @@ public partial class MainWindow : Window
 
     private async Task LoadSetValueAsync(KillEquipment equipment, CancellationToken ct)
     {
-        var items = new (string? Type, int Quality)[]
-        {
-            (equipment.MainHand?.Type, equipment.MainHand?.Quality ?? 1),
-            (equipment.OffHand?.Type,  equipment.OffHand?.Quality  ?? 1),
-            (equipment.Head?.Type,     equipment.Head?.Quality     ?? 1),
-            (equipment.Armor?.Type,    equipment.Armor?.Quality    ?? 1),
-            (equipment.Shoes?.Type,    equipment.Shoes?.Quality    ?? 1),
-            (equipment.Bag?.Type,      equipment.Bag?.Quality      ?? 1),
-            (equipment.Cape?.Type,     equipment.Cape?.Quality     ?? 1),
-            (equipment.Mount?.Type,    equipment.Mount?.Quality    ?? 1),
-            (equipment.Potion?.Type,   equipment.Potion?.Quality   ?? 1),
-            (equipment.Food?.Type,     equipment.Food?.Quality     ?? 1),
-        }.Where(x => !string.IsNullOrEmpty(x.Type)).ToList();
+        var items = GetEquipmentItems(equipment);
 
         if (items.Count == 0) { Dispatcher.UIThread.Invoke(() => SetValueText.IsVisible = false); return; }
 
         try
         {
-            var tasks = items.Select(x => _apiService.GetItemPriceAsync(x.Type!, x.Quality, ct)).ToList();
-            await Task.WhenAll(tasks);
+            var ids = items.Select(i => i.Type)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            var rows = await _apiService.GetBatchPricesAsync(ids, ct) ?? [];
             if (ct.IsCancellationRequested) return;
 
             double total  = 0;
@@ -1982,22 +2020,104 @@ public partial class MainWindow : Window
         catch { Dispatcher.UIThread.Invoke(() => SetValueText.IsVisible = false); }
     }
 
-    private static readonly HttpClient _avatarClient = new()
+    private static readonly HttpClient _avatarClient = CreateImageClient();
+    private static readonly string ImageCacheDir = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AlbionPrices",
+        "ImageCache");
+
+    private static HttpClient CreateImageClient()
     {
-        Timeout = TimeSpan.FromSeconds(10),
-        DefaultRequestHeaders = { { "User-Agent", "AlbionPrices/1.0" } },
-    };
+        var handler = new HttpClientHandler
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip |
+                                     System.Net.DecompressionMethods.Deflate |
+                                     System.Net.DecompressionMethods.Brotli,
+            UseProxy = true,
+        };
+        var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(20),
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36");
+        client.DefaultRequestHeaders.Accept.ParseAdd("image/png,image/*;q=0.8,*/*;q=0.5");
+        return client;
+    }
 
     private static async Task LoadImageFromUrlAsync(Image img, string url)
     {
         try
         {
-            var bytes = await _avatarClient.GetByteArrayAsync(url);
-            using var ms  = new MemoryStream(bytes);
-            var bmp = new Bitmap(ms);
-            Dispatcher.UIThread.Invoke(() => img.Source = bmp);
+            var bytes = await LoadImageBytesAsync(url);
+            await SetImageBytesAsync(img, bytes);
+        }
+        catch (Exception ex)
+        {
+            TryDeleteImageCache(url);
+            try
+            {
+                var bytes = await DownloadImageBytesAsync(url);
+                await SetImageBytesAsync(img, bytes);
+            }
+            catch (Exception retryEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"Image load failed: {ex.Message}; retry: {retryEx.Message} ({url})");
+            }
+        }
+    }
+
+    private static async Task SetImageBytesAsync(Image img, byte[] bytes)
+    {
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            using var ms = new MemoryStream(bytes);
+            img.Source = new Bitmap(ms);
+            img.InvalidateVisual();
+        });
+    }
+
+    private static async Task<byte[]> LoadImageBytesAsync(string url)
+    {
+        Directory.CreateDirectory(ImageCacheDir);
+        var cacheFile = GetImageCachePath(url);
+        if (File.Exists(cacheFile))
+        {
+            var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(cacheFile);
+            if (age < TimeSpan.FromDays(14))
+                return await File.ReadAllBytesAsync(cacheFile);
+        }
+
+        return await DownloadImageBytesAsync(url);
+    }
+
+    private static async Task<byte[]> DownloadImageBytesAsync(string url)
+    {
+        Directory.CreateDirectory(ImageCacheDir);
+        var cacheFile = GetImageCachePath(url);
+        var bytes = await _avatarClient.GetByteArrayAsync(url);
+        if (bytes.Length > 0)
+            await File.WriteAllBytesAsync(cacheFile, bytes);
+        return bytes;
+    }
+
+    private static string GetImageCachePath(string url) =>
+        System.IO.Path.Combine(ImageCacheDir, GetImageCacheKey(url) + ".png");
+
+    private static void TryDeleteImageCache(string url)
+    {
+        try
+        {
+            var cacheFile = GetImageCachePath(url);
+            if (File.Exists(cacheFile))
+                File.Delete(cacheFile);
         }
         catch { }
+    }
+
+    private static string GetImageCacheKey(string url)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url));
+        return Convert.ToHexString(bytes);
     }
 
     private static SolidColorBrush QualityBrush(int quality) => quality switch
@@ -2011,6 +2131,231 @@ public partial class MainWindow : Window
 
     // ── Deaths ───────────────────────────────────────────────────────────────
 
+    private void CloseCombatCompare_Click(object? sender, RoutedEventArgs e) =>
+        CombatComparePanel.IsVisible = false;
+
+    private void ShowCombatCompare(KillEvent ev)
+    {
+        if (ev.Killer == null || ev.Victim == null) return;
+
+        CombatComparePanel.IsVisible = true;
+        CombatMetaText.Text = ev.TimeStamp.HasValue
+            ? $"{FormatAgo(ev.TimeStamp.Value.ToUniversalTime())} - Fame: {FormatFame(ev.TotalVictimKillFame)}"
+            : $"Fame: {FormatFame(ev.TotalVictimKillFame)}";
+
+        WinnerNameText.Text = ev.Killer.Name ?? "Desconocido";
+        WinnerGuildText.Text = string.IsNullOrWhiteSpace(ev.Killer.GuildName) ? "Sin guild" : ev.Killer.GuildName;
+        WinnerIpText.Text = ev.Killer.AverageItemPower.HasValue ? $"IP {ev.Killer.AverageItemPower.Value:F0}" : "IP --";
+
+        LoserNameText.Text = ev.Victim.Name ?? "Desconocido";
+        LoserGuildText.Text = string.IsNullOrWhiteSpace(ev.Victim.GuildName) ? "Sin guild" : ev.Victim.GuildName;
+        LoserIpText.Text = ev.Victim.AverageItemPower.HasValue ? $"IP {ev.Victim.AverageItemPower.Value:F0}" : "IP --";
+
+        var assists = ev.Participants?
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name)
+                     && !string.Equals(p.Id, ev.Killer.Id, StringComparison.OrdinalIgnoreCase)
+                     && !string.Equals(p.Id, ev.Victim.Id, StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+
+        AssistantsText.Text = assists.Count > 0 ? $"Asistieron: {string.Join(", ", assists)}" : "";
+        AssistantsText.IsVisible = assists.Count > 0;
+
+        RenderEquipmentGrid(WinnerEquipmentGrid, ev.Killer.Equipment);
+        RenderEquipmentGrid(LoserEquipmentGrid, ev.Victim.Equipment);
+        WinnerSetValueText.Text = "Valor estimado: calculando...";
+        LoserSetValueText.Text = "Valor estimado: calculando...";
+        LootValueText.Text = "Loot estimado: calculando...";
+        RenderLoot(ev);
+
+        _setValueCts?.Cancel();
+        _setValueCts = new CancellationTokenSource();
+        _ = LoadCombatValuesAsync(ev, _setValueCts.Token);
+    }
+
+    private void RenderEquipmentGrid(Grid target, KillEquipment? equipment)
+    {
+        target.Children.Clear();
+        foreach (var (item, row, col, label) in GetEquipmentSlots(equipment))
+        {
+            var border = CreateItemSlot(item, label, 78, showCount: false);
+            Grid.SetRow(border, row);
+            Grid.SetColumn(border, col);
+            target.Children.Add(border);
+        }
+    }
+
+    private void RenderLoot(KillEvent ev)
+    {
+        LootItemsPanel.Children.Clear();
+        var loot = GetDroppedLoot(ev).Take(24).ToList();
+        if (loot.Count == 0)
+        {
+            LootValueText.Text = "Loot estimado: 0 plata (sin items dropeados)";
+            return;
+        }
+
+        foreach (var item in loot)
+            LootItemsPanel.Children.Add(CreateItemSlot(item, "Loot", 58, showCount: true));
+    }
+
+    private Border CreateItemSlot(EquipmentItem? item, string label, double size, bool showCount)
+    {
+        var itemName = item?.Type != null ? (_itemDatabase.GetNameById(item.Type) ?? item.Type) : null;
+        var border = new Border
+        {
+            Width = size,
+            Height = size,
+            Margin = new Thickness(3),
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(Color.FromArgb((byte)(item?.Type != null ? 48 : 20), 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = item?.Type != null ? QualityBrush(item.Quality) : new SolidColorBrush(Color.FromRgb(48, 48, 54)),
+        };
+        ToolTip.SetTip(border, itemName != null ? $"{label}: {itemName}" : label);
+        if (item?.Type == null) return border;
+
+        var grid = new Grid();
+        var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(3) };
+        grid.Children.Add(img);
+        _ = LoadImageFromUrlAsync(img, GameInfoService.GetItemIconUrl(item.Type));
+
+        if (showCount && item.Count > 1)
+        {
+            grid.Children.Add(new TextBlock
+            {
+                Text = $"x{item.Count}",
+                Foreground = Brushes.Gold,
+                FontSize = 12,
+                FontWeight = FontWeight.Bold,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 2, 1),
+            });
+        }
+
+        border.Child = grid;
+        border.Cursor = new Cursor(StandardCursorType.Hand);
+        var capturedId = item.Type;
+        var capturedName = itemName ?? item.Type;
+        var capturedQuality = item.Quality;
+        border.PointerReleased += (_, _) =>
+        {
+            SetActiveMode(PriceModeContent, PriceModeBtn);
+            (Application.Current as App)?.RealtimeService?.SetItem(null);
+            _ = CheckItemById(capturedId, capturedName, capturedQuality);
+        };
+        return border;
+    }
+
+    private static List<(EquipmentItem? Item, int Row, int Col, string Label)> GetEquipmentSlots(KillEquipment? equipment) =>
+        equipment == null ? [] :
+        [
+            (equipment.Bag,      0, 0, "Bolso"),
+            (equipment.Head,     0, 1, "Cabeza"),
+            (equipment.Cape,     0, 2, "Capa"),
+            (equipment.MainHand, 1, 0, "Arma"),
+            (equipment.Armor,    1, 1, "Armadura"),
+            (equipment.OffHand,  1, 2, "Off-hand"),
+            (equipment.Potion,   2, 0, "Pocion"),
+            (equipment.Shoes,    2, 1, "Zapatos"),
+            (equipment.Food,     2, 2, "Comida"),
+            (equipment.Mount,    3, 1, "Montura"),
+        ];
+
+    private static List<EquipmentItem> GetEquipmentItems(KillEquipment? equipment) =>
+        GetEquipmentSlots(equipment).Select(s => s.Item).Where(i => i?.Type != null).Cast<EquipmentItem>().ToList();
+
+    private static List<EquipmentItem> GetDroppedLoot(KillEvent ev)
+    {
+        var items = new List<EquipmentItem>();
+        if (ev.Victim?.Inventory != null)
+            items.AddRange(ev.Victim.Inventory.Where(i => IsCountableLootItem(i, requireDropped: false)).Cast<EquipmentItem>());
+        items.AddRange(GetEquipmentItems(ev.Victim?.Equipment).Where(i => IsCountableLootItem(i, requireDropped: true)));
+        return items;
+    }
+
+    private static bool IsCountableLootItem(EquipmentItem? item, bool requireDropped)
+    {
+        if (string.IsNullOrWhiteSpace(item?.Type)) return false;
+        if (requireDropped && item.Dropped != true) return false;
+        var id = item.Type.ToUpperInvariant();
+        if (id.Contains("JOURNAL") ||
+            id.Contains("TOME") ||
+            id.Contains("SKILLBOOK") ||
+            id.Contains("SILVERBAG") ||
+            id.Contains("NONTRADABLE"))
+            return false;
+        return true;
+    }
+
+    private async Task LoadCombatValuesAsync(KillEvent ev, CancellationToken ct)
+    {
+        var winnerItems = GetEquipmentItems(ev.Killer?.Equipment);
+        var loserItems = GetEquipmentItems(ev.Victim?.Equipment);
+        var lootItems = GetDroppedLoot(ev);
+        var allIds = winnerItems.Concat(loserItems).Concat(lootItems)
+            .Select(i => i.Type)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (allIds.Count == 0) return;
+
+        try
+        {
+            var rows = await _apiService.GetBatchPricesAsync(allIds, ct) ?? [];
+            if (ct.IsCancellationRequested) return;
+
+            var winnerValue = EstimateItemsValue(winnerItems, rows);
+            var loserValue = EstimateItemsValue(loserItems, rows);
+            var lootValue = EstimateItemsValue(lootItems, rows);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                WinnerSetValueText.Text = $"Valor estimado: {winnerValue:N0} plata";
+                LoserSetValueText.Text = $"Valor estimado: {loserValue:N0} plata";
+                LootValueText.Text = $"Loot estimado: {lootValue:N0} plata ({lootItems.Count(i => i.Type != null)}/{lootItems.Count} items)";
+            });
+        }
+        catch (OperationCanceledException) { }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                WinnerSetValueText.Text = "Valor estimado: N/A";
+                LoserSetValueText.Text = "Valor estimado: N/A";
+                LootValueText.Text = "Loot estimado: N/A";
+            });
+        }
+    }
+
+    private double EstimateItemsValue(IEnumerable<EquipmentItem> items, List<PriceApiResponse> rows)
+    {
+        double total = 0;
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Type)) continue;
+            var quality = item.Quality <= 0 ? 1 : item.Quality;
+            var cacheKey = $"{_apiService.Region}:{item.Type}:{quality}";
+            if (!_combatUnitPriceCache.TryGetValue(cacheKey, out var unitPrice))
+            {
+                unitPrice = rows
+                    .Where(r => string.Equals(r.ItemId, item.Type, StringComparison.OrdinalIgnoreCase)
+                             && (r.Quality ?? 1) == quality)
+                    .Select(r => Math.Max(r.BuyPriceMax ?? 0, r.SellPriceMin ?? 0))
+                    .DefaultIfEmpty(0)
+                    .Max();
+                if (unitPrice > 0)
+                    _combatUnitPriceCache[cacheKey] = unitPrice;
+            }
+            if (unitPrice > 0)
+                total += unitPrice * Math.Max(1, item.Count);
+        }
+        return total;
+    }
+
     private void DisplayDeaths(List<KillEvent>? deaths)
     {
         if (deaths == null || deaths.Count == 0)
@@ -2023,7 +2368,9 @@ public partial class MainWindow : Window
             .Where(d => d.TimeStamp.HasValue)
             .OrderByDescending(d => d.TimeStamp)
             .Take(5)
-            .Select(d => new DeathItem(
+            .Select(d => new CombatEventItem(
+                d,
+                d.Killer?.Id ?? "",
                 d.Killer?.Name  ?? "Desconocido",
                 string.IsNullOrEmpty(d.Killer?.GuildName) ? "" : $"[{d.Killer.GuildName}]",
                 FormatAgo(d.TimeStamp!.Value.ToUniversalTime())))
@@ -2074,6 +2421,7 @@ public partial class MainWindow : Window
     private void ApplyRegion(ServerRegion region)
     {
         (Application.Current as App)?.ChangeRegion(region);
+        _combatUnitPriceCache.Clear();
         RefreshRegionButtons(region);
         _ = LoadGoldPriceAsync();
     }
@@ -3907,7 +4255,13 @@ public partial class MainWindow : Window
     }
 }
 
-// Named record to replace anonymous type in DeathsList binding
-public record DeathItem(string KillerName, string KillerGuild, string TimeAgo);
-public record KillItem(string VictimId, string VictimName, string VictimGuild, string TimeAgo);
+public record CombatEventItem(KillEvent Event, string PlayerId, string PlayerName, string PlayerGuild, string TimeAgo)
+{
+    public string VictimName => PlayerName;
+    public string VictimGuild => PlayerGuild;
+    public string KillerName => PlayerName;
+    public string KillerGuild => PlayerGuild;
+}
 public record SearchSuggestion(string ItemId, string ItemName, string Badge, bool Starred);
+
+

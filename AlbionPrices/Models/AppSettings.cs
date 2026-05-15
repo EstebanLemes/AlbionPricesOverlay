@@ -6,6 +6,13 @@ namespace AlbionPrices.Models;
 
 public enum ServerRegion { Americas, Europe, Asia }
 
+public enum BuildValuationMode
+{
+    CheapestSellOrder,
+    HighestBuyOrder,
+    HighestSellOrder,
+}
+
 public class AppSettings
 {
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -18,6 +25,8 @@ public class AppSettings
     public string  FlipCategory     { get; set; } = "Todo";
     public double  FlipTransportPct { get; set; } = 0;
     public bool    CraftPremium     { get; set; } = false;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public BuildValuationMode BuildValuationMode { get; set; } = BuildValuationMode.CheapestSellOrder;
     public List<IslandConfig> Islands { get; set; } = [];
 
     private static readonly string FilePath = Path.Combine(

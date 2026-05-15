@@ -34,6 +34,10 @@ public class GameInfoService
 
     private async Task<string?> FetchAsync(string url, CancellationToken ct)
     {
+        var curlResult = await FetchWithCurlAsync(url, ct);
+        if (!string.IsNullOrWhiteSpace(curlResult))
+            return curlResult;
+
         try
         {
             var response = await _httpClient.GetAsync(url, ct);
@@ -42,6 +46,53 @@ public class GameInfoService
         }
         catch
         {
+            return null;
+        }
+    }
+
+    private static async Task<string?> FetchWithCurlAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "curl.exe",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            process.StartInfo.ArgumentList.Add("-sS");
+            process.StartInfo.ArgumentList.Add("-L");
+            process.StartInfo.ArgumentList.Add("--max-time");
+            process.StartInfo.ArgumentList.Add("20");
+            process.StartInfo.ArgumentList.Add("-A");
+            process.StartInfo.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36");
+            process.StartInfo.ArgumentList.Add(url);
+
+            if (!process.Start()) return null;
+
+            var outputTask = process.StandardOutput.ReadToEndAsync(ct);
+            var errorTask = process.StandardError.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct);
+
+            var output = await outputTask;
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                return output;
+
+            var error = await errorTask;
+            Debug.WriteLine($"[GameInfo] curl failed {process.ExitCode}: {error}");
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[GameInfo] curl fallback failed: {ex.Message}");
             return null;
         }
     }
@@ -99,7 +150,7 @@ public class GameInfoService
             }
 
             using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            attemptCts.CancelAfter(TimeSpan.FromSeconds(8));
+            attemptCts.CancelAfter(TimeSpan.FromSeconds(25));
 
             var json = await FetchAsync(regionUrl + path, attemptCts.Token);
             if (json != null && json.Contains("\"Id\"", StringComparison.OrdinalIgnoreCase))

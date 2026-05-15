@@ -143,6 +143,9 @@ public class KillEvent
     [JsonPropertyName("Victim")]
     public KillParticipant? Victim { get; set; }
 
+    [JsonPropertyName("Participants")]
+    public List<KillParticipant>? Participants { get; set; }
+
     [JsonPropertyName("TotalVictimKillFame")]
     public long TotalVictimKillFame { get; set; }
 }
@@ -160,6 +163,9 @@ public class KillParticipant
 
     [JsonPropertyName("Equipment")]
     public KillEquipment? Equipment { get; set; }
+
+    [JsonPropertyName("Inventory")]
+    public List<EquipmentItem?>? Inventory { get; set; }
 
     [JsonPropertyName("AverageItemPower")]
     public double? AverageItemPower { get; set; }
@@ -186,4 +192,12 @@ public class EquipmentItem
 
     [JsonPropertyName("Quality")]
     public int Quality { get; set; }
+
+    [JsonPropertyName("Count")]
+    public int Count { get; set; } = 1;
+
+    [JsonPropertyName("Dropped")]
+    public bool? Dropped { get; set; }
+
+    public double? EstimatedMarketValue { get; set; }
 }
